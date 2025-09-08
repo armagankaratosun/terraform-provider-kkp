@@ -1,10 +1,11 @@
 package cluster_v2
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"strings"
+    "context"
+    "encoding/json"
+    "errors"
+    "strings"
+    "time"
 
 	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -35,18 +36,40 @@ func (r *resourceCluster) Metadata(_ context.Context, req resource.MetadataReque
 }
 
 func (r *resourceCluster) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	resp.Schema = rschema.Schema{
-		Description: "Create a KKP cluster in the provider-level project (modular cloud support).",
-		Attributes: map[string]rschema.Attribute{
-			"id": rschema.StringAttribute{
-				Computed:    true,
-				Description: "Cluster ID.",
-			},
-			"name": rschema.StringAttribute{
-				Required:    true,
-				Description: "Cluster name.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+    resp.Schema = rschema.Schema{
+        Description: "Create a KKP cluster in the provider-level project (modular cloud support).",
+        Attributes: map[string]rschema.Attribute{
+            "id": rschema.StringAttribute{
+                Computed:    true,
+                Description: "Cluster ID.",
+            },
+            "use_template": rschema.BoolAttribute{
+                Optional:    true,
+                Description: "When true with template_id set, create the cluster by instantiating a Cluster Template (V2).",
+            },
+            "template_id": rschema.StringAttribute{
+                Optional:    true,
+                Description: "Cluster Template ID to instantiate (used when use_template = true).",
+                PlanModifiers: []planmodifier.String{
+                    stringplanmodifier.RequiresReplace(),
+                },
+            },
+            "template_name": rschema.StringAttribute{
+                Optional:    true,
+                Description: "Cluster Template name to instantiate (alternative to template_id). If both are set, template_id is used.",
+                PlanModifiers: []planmodifier.String{
+                    stringplanmodifier.RequiresReplace(),
+                },
+            },
+            "template_replicas": rschema.Int64Attribute{
+                Optional:    true,
+                Description: "Number of template instances to create (default 1).",
+            },
+            "name": rschema.StringAttribute{
+                Required:    true,
+                Description: "Cluster name.",
+                PlanModifiers: []planmodifier.String{
+                    stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"k8s_version": rschema.StringAttribute{
@@ -145,14 +168,136 @@ func (r *resourceCluster) Configure(_ context.Context, req resource.ConfigureReq
 }
 
 func (r *resourceCluster) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	if !r.ValidateResourceBase(resp) {
-		return
-	}
+    if !r.ValidateResourceBase(resp) {
+        return
+    }
 
-	plan, ok := kkp.ExtractPlan[clusterState](ctx, req, resp)
-	if !ok {
-		return
-	}
+    plan, ok := kkp.ExtractPlan[clusterState](ctx, req, resp)
+    if !ok {
+        return
+    }
+
+    // --- Optional: Template-based creation path ---
+    useTemplate := false
+    if !plan.UseTemplate.IsNull() && !plan.UseTemplate.IsUnknown() {
+        useTemplate = plan.UseTemplate.ValueBool()
+    }
+    templateID := strings.TrimSpace(plan.TemplateID.ValueString())
+    templateName := strings.TrimSpace(plan.TemplateName.ValueString())
+    if useTemplate && templateID != "" {
+        replicas := int64(1)
+        if !plan.TemplateReplicas.IsNull() && !plan.TemplateReplicas.IsUnknown() {
+            replicas = plan.TemplateReplicas.ValueInt64()
+        }
+
+        clusterName := strings.TrimSpace(plan.Name.ValueString())
+        if clusterName == "" {
+            resp.Diagnostics.AddError("Missing name", "When use_template = true, 'name' must match the cluster name of the template to resolve the created cluster.")
+            return
+        }
+
+        pcli := kapi.New(r.Client.Transport, nil)
+
+        // If only template_name provided, resolve it to an ID via ListClusterTemplates
+        if templateID == "" && templateName != "" {
+            lres, lerr := pcli.ListClusterTemplates(kapi.NewListClusterTemplatesParams().WithProjectID(r.DefaultProjectID), nil)
+            if lerr != nil || lres == nil {
+                if lerr != nil {
+                    resp.Diagnostics.AddError("Failed to resolve template by name", lerr.Error())
+                } else {
+                    resp.Diagnostics.AddError("Failed to resolve template by name", "empty response")
+                }
+                return
+            }
+            matches := make([]string, 0)
+            for _, t := range lres.Payload {
+                if t == nil {
+                    continue
+                }
+                if strings.TrimSpace(t.Name) == templateName {
+                    matches = append(matches, t.ID)
+                }
+            }
+            if len(matches) == 0 {
+                resp.Diagnostics.AddError("Template not found", "No cluster template with the given name found in the project. Please check the name or use template_id.")
+                return
+            }
+            if len(matches) > 1 {
+                resp.Diagnostics.AddError("Template name is ambiguous", "Multiple templates share this name. Please specify template_id instead.")
+                return
+            }
+            templateID = matches[0]
+        }
+
+        if templateID == "" {
+            resp.Diagnostics.AddError("Missing template reference", "Provide either template_id or template_name when use_template = true.")
+            return
+        }
+        _, err := pcli.CreateClusterTemplateInstance(
+            kapi.NewCreateClusterTemplateInstanceParams().
+                WithProjectID(r.DefaultProjectID).
+                WithClusterTemplateID(templateID).
+                WithBody(kapi.CreateClusterTemplateInstanceBody{Replicas: replicas}),
+            nil,
+        )
+        if err != nil {
+            resp.Diagnostics.AddError("Create cluster from template failed", err.Error())
+            return
+        }
+
+        // Resolve cluster ID by polling ListClustersV2 for appearance of clusterName
+        var clusterID string
+        findErr := kkp.PollWithTimeout(ctx, 5*time.Second, 10*time.Minute, func(pc context.Context) (bool, error) {
+            list, lerr := pcli.ListClustersV2(
+                kapi.NewListClustersV2Params().WithProjectID(r.DefaultProjectID),
+                nil,
+            )
+            if lerr != nil || list == nil || list.Payload == nil {
+                return false, nil
+            }
+            if list.Payload != nil && list.Payload.Clusters != nil {
+                for _, c := range list.Payload.Clusters {
+                    if c == nil {
+                        continue
+                    }
+                    if strings.TrimSpace(c.Name) == clusterName {
+                        clusterID = c.ID
+                        return true, nil
+                    }
+                }
+            }
+            return false, nil
+        })
+        if findErr != nil || clusterID == "" {
+            if findErr != nil {
+                resp.Diagnostics.AddError("Created cluster not found", findErr.Error())
+            } else {
+                resp.Diagnostics.AddError("Created cluster not found", "Timed out waiting for cluster to appear with the expected name. Confirm the template's cluster name.")
+            }
+            return
+        }
+
+        // Wait for ready using the existing checker
+        checker := &kkp.ClusterHealthChecker{
+            Client:    r.Client,
+            ProjectID: r.DefaultProjectID,
+            ClusterID: clusterID,
+        }
+        if err := checker.WaitForClusterReady(ctx); err != nil {
+            resp.Diagnostics.AddError("Cluster provisioning timed out", err.Error())
+            return
+        }
+
+        // Persist minimal state; keep planned fields untouched except ID and Name
+        state := plan
+        state.ID = tftypes.StringValue(clusterID)
+        // Refresh name from API for accuracy
+        if got, gerr := pcli.GetClusterV2(kapi.NewGetClusterV2Params().WithProjectID(r.DefaultProjectID).WithClusterID(clusterID), nil); gerr == nil && got != nil && got.Payload != nil {
+            state.Name = tftypes.StringValue(got.Payload.Name)
+        }
+        resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
+        return
+    }
 
 	cp := Plan{
 		Name:       plan.Name.ValueString(),
@@ -433,15 +578,20 @@ func (cloudBlockMatchesProviderValidator) MarkdownDescription(context.Context) s
 }
 
 func (cloudBlockMatchesProviderValidator) ValidateResource(
-	ctx context.Context,
-	req resource.ValidateConfigRequest,
-	resp *resource.ValidateConfigResponse,
+    ctx context.Context,
+    req resource.ValidateConfigRequest,
+    resp *resource.ValidateConfigResponse,
 ) {
-	var cfg clusterState
-	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
+    var cfg clusterState
+    resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
+    if resp.Diagnostics.HasError() {
+        return
+    }
+
+    // Skip cloud block validation when creating from template
+    if !cfg.UseTemplate.IsNull() && !cfg.UseTemplate.IsUnknown() && cfg.UseTemplate.ValueBool() {
+        return
+    }
 
 	cloud := strings.ToLower(cfg.Cloud.ValueString())
 	usingPreset := strings.TrimSpace(cfg.Preset.ValueString()) != ""
