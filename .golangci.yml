@@ -1,20 +1,8 @@
-version: "2"
-
 run:
   timeout: 10m
   issues-exit-code: 1
   tests: true
-  skip-dirs:
-    - vendor
-    - examples
-    - bin
-  skip-files:
-    - ".*\\.pb\\.go$"
 
-output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
 
 linters-settings:
   govet: {}
@@ -53,8 +41,6 @@ linters-settings:
         disabled: true
   staticcheck:
     checks: ["all"]
-  unused:
-    check-exported: false
 
 linters:
   disable-all: true
@@ -64,7 +50,6 @@ linters:
     - govet
     - shadow
     - staticcheck
-    - unused
     - ineffassign
     
     # Code quality
@@ -97,6 +82,8 @@ issues:
   max-same-issues: 0
   
   exclude-rules:
+    # Ignore generated protobuf files
+    - path: ".*\\.pb\\.go$"
     # Exclude some linters from running on tests files
     - path: _test\.go
       linters:
