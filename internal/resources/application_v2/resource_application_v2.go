@@ -292,7 +292,7 @@ func (r *resourceApplication) Create(ctx context.Context, req resource.CreateReq
 		// Set application reference info from spec
 		if out.Payload.Spec.ApplicationRef != nil {
 			state.ApplicationName = tftypes.StringValue(out.Payload.Spec.ApplicationRef.Name)
-			state.ApplicationVersion = tftypes.StringValue(fmt.Sprintf("%v", out.Payload.Spec.ApplicationRef.Version))
+            state.ApplicationVersion = tftypes.StringValue(out.Payload.Spec.ApplicationRef.Version)
 		}
 
 		// Convert values back to JSON string for storage
@@ -411,7 +411,7 @@ func (r *resourceApplication) updateStateFromApplication(state *applicationState
 		// Update application reference info
 		if application.Payload.Spec.ApplicationRef != nil {
 			state.ApplicationName = tftypes.StringValue(application.Payload.Spec.ApplicationRef.Name)
-			state.ApplicationVersion = tftypes.StringValue(fmt.Sprintf("%v", application.Payload.Spec.ApplicationRef.Version))
+            state.ApplicationVersion = tftypes.StringValue(application.Payload.Spec.ApplicationRef.Version)
 		}
 
 		// Convert values to JSON string, preserving null state if values are empty
@@ -548,7 +548,7 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 	if got.Payload.Spec != nil {
 		if got.Payload.Spec.ApplicationRef != nil {
 			finalState.ApplicationName = tftypes.StringValue(got.Payload.Spec.ApplicationRef.Name)
-			finalState.ApplicationVersion = tftypes.StringValue(fmt.Sprintf("%v", got.Payload.Spec.ApplicationRef.Version))
+            finalState.ApplicationVersion = tftypes.StringValue(got.Payload.Spec.ApplicationRef.Version)
 		}
 
 		// Handle values field - preserve null state when appropriate
@@ -732,13 +732,13 @@ func (r *resourceApplication) waitForApplicationReady(ctx context.Context, clust
 		// Wait before next poll, but respect context cancellation
 		select {
 		case <-ctx.Done():
-			tflog.Warn(ctx, "Application installation monitoring cancelled", map[string]any{
+        tflog.Warn(ctx, "Application installation monitoring canceled", map[string]any{
 				"cluster_id": clusterID,
 				"namespace":  namespace,
 				"name":       name,
 				"attempts":   attempt,
 			})
-			return "failed", "Installation cancelled"
+            return "failed", "Installation canceled"
 		case <-time.After(pollInterval):
 			continue
 		}

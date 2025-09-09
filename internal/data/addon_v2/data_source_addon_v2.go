@@ -132,12 +132,12 @@ func (d *dataSourceAddons) Read(ctx context.Context, req datasource.ReadRequest,
 
 					// Convert variables to JSON string using shared utility
 					if addon.Spec.Variables != nil {
-						variablesJSON, err := kkp.VariablesToJSON(addon.Spec.Variables)
-						if err == nil {
-							addonModel.Variables = types.StringValue(variablesJSON)
-						} else {
-							addonModel.Variables = types.StringValue("{}")
-						}
+                        variablesJSON, jsonErr := kkp.VariablesToJSON(addon.Spec.Variables)
+                        if jsonErr == nil {
+                            addonModel.Variables = types.StringValue(variablesJSON)
+                        } else {
+                            addonModel.Variables = types.StringValue("{}")
+                        }
 					} else {
 						addonModel.Variables = types.StringValue("{}")
 					}

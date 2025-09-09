@@ -75,7 +75,7 @@ func (r *resourceSSHKey) Schema(_ context.Context, _ resource.SchemaRequest, res
 				},
 				Validators: []validator.String{
 					stringvalidator.RegexMatches(
-						regexp.MustCompile(`^[^\s]+\s+[A-Za-z0-9+/=]+(?:\s+.+)?\s*$`),
+                        regexp.MustCompile(`^\S+\s+[A-Za-z0-9+/=]+(?:\s+.+)?\s*$`),
 						"must be a valid OpenSSH public key",
 					),
 				},

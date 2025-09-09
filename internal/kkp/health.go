@@ -72,7 +72,7 @@ func StatusURLReady(status any) (string, bool) {
 }
 
 // Poll calls fn immediately and then every `interval` until fn returns done=true,
-// an error, or the context is cancelled/expired.
+// an error, or the context is canceled/expired.
 // It returns fn's error (if any) or ctx.Err() when the context ends.
 func Poll(ctx context.Context, interval time.Duration, fn func(context.Context) (done bool, err error)) error {
 	// First attempt (no initial delay)

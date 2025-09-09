@@ -64,11 +64,11 @@ func buildTLSConfig(insecure bool, caFile string) (*tls.Config, error) {
 			return nil, fmt.Errorf("failed to append certs from %s", caFile)
 		}
 	}
-	return &tls.Config{
-		InsecureSkipVerify: insecure, //nolint:gosec
-		RootCAs:            rootCAs,
-		MinVersion:         tls.VersionTLS12,
-	}, nil
+    return &tls.Config{
+        InsecureSkipVerify: insecure, //nolint:gosec // user-configurable for dev/self-signed endpoints
+        RootCAs:            rootCAs,
+        MinVersion:         tls.VersionTLS12,
+    }, nil
 }
 
 func newHTTPClient(timeout time.Duration, tlsCfg *tls.Config) *http.Client {

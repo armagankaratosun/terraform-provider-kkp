@@ -59,7 +59,7 @@ func NewHTTPClient(cfg Config) (*Client, error) {
 
 // Ping checks the base API path for reachability (2xx/3xx).
 func (c *Client) Ping(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL.String(), nil)
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL.String(), http.NoBody)
 	if err != nil {
 		return err
 	}

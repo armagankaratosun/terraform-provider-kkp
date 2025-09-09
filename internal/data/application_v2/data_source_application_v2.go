@@ -2,9 +2,8 @@
 package application_v2
 
 import (
-	"context"
-	"fmt"
-	"sort"
+    "context"
+    "sort"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -152,7 +151,7 @@ func (d *dataSourceApplications) Read(ctx context.Context, req datasource.ReadRe
 		if app.Spec != nil {
 			if app.Spec.ApplicationRef != nil {
 				summary.ApplicationName = types.StringValue(app.Spec.ApplicationRef.Name)
-				summary.ApplicationVersion = types.StringValue(fmt.Sprintf("%v", app.Spec.ApplicationRef.Version))
+                summary.ApplicationVersion = types.StringValue(app.Spec.ApplicationRef.Version)
 			}
 		}
 

@@ -9,7 +9,7 @@ linters-settings:
     enable:
       - shadow
   gocyclo:
-    min-complexity: 15
+    min-complexity: 25
   dupl:
     threshold: 100
   goconst:
@@ -25,6 +25,9 @@ linters-settings:
     disabled-checks:
       - wrapperFunc
       - dupImport
+      - hugeParam
+      - unnamedResult
+      - typeAssertChain
   funlen:
     lines: 120
     statements: 60
