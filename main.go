@@ -13,11 +13,11 @@ import (
 var version = "0.0.1"
 
 func main() {
-    err := providerserver.Serve(
-        context.Background(),
-        provider.New(version),
-        providerserver.ServeOpts{},
-    )
+	err := providerserver.Serve(
+		context.Background(),
+		provider.New(version),
+		providerserver.ServeOpts{},
+	)
 	if err != nil {
 		panic(err)
 	}

@@ -1,4 +1,4 @@
-.PHONY: help build test lint lint-fix clean install dev-deps fmt fmt-go-s fmt-examples tidy check pre-commit dev release
+.PHONY: help build test lint lint-fix clean install dev-deps fmt fmt-go-s fmt-examples tidy check pre-commit dev release tag tag-push tag-delete tag-repush
 
 # Variables
 BINARY_NAME=terraform-provider-kkp
@@ -83,5 +83,22 @@ pre-commit: fmt tidy lint test ## Run pre-commit checks (format, tidy, lint, tes
 dev: clean fmt tidy build ## Full development build (clean, format, tidy, build)
 
 release: clean test lint build ## Release build (clean, test, lint, build)
+
+# Tagging helpers
+tag: ## Create an annotated git tag v$(VERSION) on HEAD
+	@git tag -a v$(VERSION) -m "Release v$(VERSION)"
+	@echo "Created tag v$(VERSION)"
+
+tag-push: ## Push tag v$(VERSION) to origin
+	@git push origin v$(VERSION)
+
+tag-delete: ## Delete local and remote tag v$(VERSION)
+	@echo "Deleting local tag v$(VERSION)"
+	@-git tag -d v$(VERSION)
+	@echo "Deleting remote tag v$(VERSION)"
+	@-git push --delete origin v$(VERSION) || git push origin :refs/tags/v$(VERSION)
+
+tag-repush: tag-delete tag ## Delete and recreate tag v$(VERSION), then push
+	@$(MAKE) tag-push
 
 .DEFAULT_GOAL := help
