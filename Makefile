@@ -48,8 +48,8 @@ clean: ## Clean build artifacts
 
 install: build ## Install the provider binary to local Terraform plugin directory
 	@echo "Installing provider locally..."
-	@mkdir -p ~/.terraform.d/plugins/registry.opentofu.org/armagankaratosun/kkp/$(VERSION)/$(GOOS)_$(GOARCH)/
-	@cp $(BUILD_DIR)/$(BINARY_NAME)_v$(VERSION) ~/.terraform.d/plugins/registry.opentofu.org/armagankaratosun/kkp/$(VERSION)/$(GOOS)_$(GOARCH)/$(BINARY_NAME)_v$(VERSION)
+	@mkdir -p ~/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$(VERSION)/$(GOOS)_$(GOARCH)/
+	@cp $(BUILD_DIR)/$(BINARY_NAME)_v$(VERSION) ~/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$(VERSION)/$(GOOS)_$(GOARCH)/$(BINARY_NAME)_v$(VERSION)
 	@echo "Provider installed to ~/.terraform.d/plugins/"
 
 dev-deps: ## Install development dependencies

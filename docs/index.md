@@ -9,7 +9,7 @@ terraform {
   required_providers {
     kkp = {
       source  = "armagankaratosun/kkp"
-      version = "~> 0.1"
+      version = "~> 0.0.1"
     }
   }
 }
@@ -90,3 +90,28 @@ The provider currently supports OpenStack as the primary cloud provider:
 - **Floating IPs**: Configurable floating IP assignment
 
 **Note**: Other cloud providers (AWS, Azure, vSphere, GCP) are not currently supported but may be added based on community demand and KKP API capabilities.
+
+## Supported Resources
+
+| Resource | Status | Description |
+|----------|--------|-------------|
+| `kkp_ssh_key_v2` | ✅ Stable | SSH key management (cloud-agnostic) |
+| `kkp_cluster_v2` | 🚧 Beta | Cluster lifecycle with health checking (OpenStack only) |
+| `kkp_machine_deployment_v2` | 🚧 Beta | Worker node management with autoscaling (OpenStack only) |
+| `kkp_addon_v2` | ✅ Stable | Cluster addon installation and management |
+| `kkp_application_v2` | ✅ Stable | Application deployment to clusters |
+
+Planned: `kkp_role_v2`, `kkp_role_binding_v2`, `kkp_namespace_v2`, `kkp_constraint_v2`, `kkp_cluster_template`, `kkp_backup_config`
+
+## Data Sources
+
+| Data Source | Status | Description |
+|-------------|--------|-------------|
+| `kkp_ssh_keys_v2` | ✅ Stable | Query existing SSH keys |
+| `kkp_clusters_v2` | ✅ Stable | Query existing clusters |
+| `kkp_machine_deployments_v2` | 🚧 Beta | Query machine deployments (cluster-dependent) |
+| `kkp_addons_v2` | ✅ Stable | Query cluster addons |
+| `kkp_applications_v2` | ✅ Stable | Query cluster applications |
+| `kkp_cluster_templates_v2` | ✅ Stable | Query cluster templates |
+
+Planned: `kkp_roles_v2`, `kkp_role_bindings_v2`, `kkp_namespaces_v2`, `kkp_constraints`, `kkp_projects`, `kkp_external_clusters`

@@ -2,7 +2,7 @@ terraform {
   required_providers {
     kkp = {
       source  = "armagankaratosun/kkp"
-      version = "~> 0.1"
+      version = "~> 0.0.1"
     }
   }
 }
@@ -40,4 +40,3 @@ resource "kkp_cluster_v2" "cluster" {
 output "cluster_ids" {
   value = { for k, c in kkp_cluster_v2.cluster : k => c.id }
 }
-

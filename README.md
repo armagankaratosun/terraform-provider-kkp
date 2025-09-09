@@ -1,5 +1,9 @@
 # Terraform Provider for Kubermatic Kubernetes Platform (KKP)
 
+[![CI](https://github.com/armagankaratosun/terraform-provider-kkp/actions/workflows/ci.yml/badge.svg)](https://github.com/armagankaratosun/terraform-provider-kkp/actions/workflows/ci.yml)
+[![Release](https://github.com/armagankaratosun/terraform-provider-kkp/actions/workflows/release.yml/badge.svg)](https://github.com/armagankaratosun/terraform-provider-kkp/actions/workflows/release.yml)
+[![Latest Version](https://img.shields.io/github/v/release/armagankaratosun/terraform-provider-kkp?sort=semver)](https://github.com/armagankaratosun/terraform-provider-kkp/releases)
+[![KKP Compatibility](https://img.shields.io/badge/KKP-2.28.2%20CE-blue)](https://github.com/kubermatic/kubermatic/releases/tag/v2.28.2)
 [![Go Report Card](https://goreportcard.com/badge/github.com/armagankaratosun/terraform-provider-kkp)](https://goreportcard.com/report/github.com/armagankaratosun/terraform-provider-kkp)
 
 The Terraform Provider for Kubermatic Kubernetes Platform (KKP) allows you to manage KKP resources using Infrastructure as Code. This provider enables you to create and manage Kubernetes clusters, machine deployments, SSH keys, addons, and applications on various cloud providers through KKP.
@@ -7,6 +11,11 @@ The Terraform Provider for Kubermatic Kubernetes Platform (KKP) allows you to ma
 ## ⚠️ Warning - Here Be Dragons!
 
 This provider is currently in active development. APIs may change and some features may not be fully implemented. Use with caution in production environments.
+
+## Compatibility
+
+The current provider version is tested with Kubermatic Kubernetes Platform (KKP) v2.28.2 — Community Edition.
+Other KKP versions may work but are not validated.
 
 ## Quickstart
 
@@ -17,7 +26,7 @@ terraform {
   required_providers {
     kkp = {
       source  = "armagankaratosun/kkp"
-      version = "~> 0.1"
+      version = "~> 0.0.1"
     }
   }
 }
@@ -85,8 +94,38 @@ See runnable configurations under [Examples](examples/README.md) for various use
 
 
 ### Discovering Options
-- Addons: Use `data "kkp_addons_v2"` with a `cluster_id` to list `available` addon names for that cluster (see `examples/data-sources/`). Then set `addon_name` in `examples/addons/` to install one.
-- Applications: Use `data "kkp_applications_v2"` with a `cluster_id` to see what’s installed (see `examples/data-sources/`). Application catalog entries (name/version) come from your KKP setup; pick a valid `application_name`/`application_version` and apply via `examples/applications/`.
+
+#### Addons
+- Purpose: discover installable addons for a given cluster.
+- How: query the data source, then pick a name from `available`.
+
+```hcl
+data "kkp_addons_v2" "this" {
+  cluster_id = "<cluster-id>"
+}
+
+output "available_addons" {
+  value = data.kkp_addons_v2.this.available
+}
+```
+
+Next: choose an addon and set `addon_name` in the [addon example](examples/addons/README.md).
+
+#### Applications
+- Purpose: list applications currently installed in a cluster.
+- How: query the data source; catalog names/versions come from your KKP setup.
+
+```hcl
+data "kkp_applications_v2" "this" {
+  cluster_id = "<cluster-id>"
+}
+
+output "installed_applications" {
+  value = data.kkp_applications_v2.this.applications
+}
+```
+
+Next: pick a valid `application_name` and `application_version`, then apply the [application example](examples/applications/README.md).
 
 ## Development
 
@@ -155,27 +194,29 @@ To install the provider locally for development:
 $ make install
 ```
 
-This will install the provider to `~/.terraform.d/plugins/registry.opentofu.org/armagankaratosun/kkp/`.
+This will install the provider to `~/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/`.
 
 ### Branching model
 
 These are the branches used in this repository:
 
 * `main` represents the current release
-* `release/v*` (e.g. `release/v0.1`) represents the latest state of a particular release branch. These branches are created when needed from `main`
+* `release/v*` (e.g. `release/v0.0.1`) represents the latest state of a particular release branch. These branches are created when needed from `main`
 
 ### Release
 
-This provider is automatically released using GitHub Actions and [GoReleaser](https://goreleaser.com/) when a tag is pushed to the repository.
+Releases are built automatically via GitHub Actions and [GoReleaser](https://goreleaser.com/) when a semver tag is pushed.
 
-To release a new version:
-1. Update the CHANGELOG.md file with the new version number and changes.
-2. Create a Git tag for the release:
-   ```
+To cut a release:
+1. Update `CHANGELOG.md` for the new version.
+2. Tag and push:
+   ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-3. The release will be automatically built and published to the Terraform Registry.
+3. A GitHub Release will be created with binaries and checksums.
+
+Note: Publishing to the Terraform/OpenTofu registries is not configured yet.
 
 ### Make Targets
 
@@ -199,50 +240,13 @@ To release a new version:
 
 ## Supported Resources & Cloud Providers
 
-For detailed configuration and usage examples, see the [documentation](docs/).
+See the docs for the full, up‑to‑date lists and details:
 
-### Resources
+- Resources: [Supported Resources](docs/index.md#supported-resources) and per‑resource docs under [docs/resources/](docs/resources/)
+- Data sources: [Data Sources](docs/index.md#data-sources) and per‑data‑source docs under [docs/data-sources/](docs/data-sources/)
+- Cloud provider support: [Cloud Provider Support](docs/index.md#cloud-provider-support)
 
-| Resource | Status | Description |
-|----------|--------|-------------|
-| `kkp_ssh_key_v2` | ✅ **Stable** | SSH key management (cloud-agnostic) |
-| `kkp_cluster_v2` | 🚧 **Beta** | Cluster lifecycle with health checking (OpenStack only) |
-| `kkp_machine_deployment_v2` | 🚧 **Beta** | Worker node management with autoscaling (OpenStack only) |
-| `kkp_addon_v2` | ✅ **Stable** | Cluster addon installation and management |
-| `kkp_application_v2` | ✅ **Stable** | Application deployment to clusters |
-
-**Planned Resources:**
-- `kkp_role_v2`, `kkp_role_binding_v2`, `kkp_namespace_v2`
-- `kkp_constraint_v2`, `kkp_cluster_template`, `kkp_backup_config`
-
-### Data Sources
-
-| Data Source | Status | Description |
-|-------------|--------|-------------|
-| `kkp_ssh_keys_v2` | ✅ **Stable** | Query existing SSH keys |
-| `kkp_clusters_v2` | ✅ **Stable** | Query existing clusters |
-| `kkp_machine_deployments_v2` | 🚧 **Beta** | Query machine deployments (cluster-dependent) |
-| `kkp_addons_v2` | ✅ **Stable** | Query cluster addons |
-| `kkp_applications_v2` | ✅ **Stable** | Query cluster applications |
-| `kkp_cluster_templates_v2` | ✅ **Stable** | Query cluster templates |
-
-**Planned Data Sources:**
-- `kkp_roles_v2`, `kkp_role_bindings_v2`, `kkp_namespaces_v2`
-- `kkp_constraints`, `kkp_projects`, `kkp_external_clusters`
-
-### Cloud Provider Support
-
-Currently **OpenStack only**:
-- ✅ Application credential authentication (direct configuration)
-- ✅ KKP preset support (for pre-configured credentials)  
-- ✅ Network and subnet configuration
-- ✅ Security groups and floating IP pools
-- ✅ Flavor and image selection for machine deployments
-- ✅ Availability zone support
-
-**Status:** 🚧 **Beta** - Fully functional for OpenStack, other cloud providers not yet implemented.
-
-**Future:** Additional cloud providers (AWS, Azure, vSphere, GCP) may be added based on community demand.
+Note: Currently OpenStack is supported (Beta). Other providers may follow.
 
 ## Contributing
 

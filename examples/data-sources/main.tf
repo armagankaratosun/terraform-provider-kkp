@@ -2,7 +2,7 @@ terraform {
   required_providers {
     kkp = {
       source  = "armagankaratosun/kkp"
-      version = "~> 0.1"
+      version = "~> 0.0.1"
     }
   }
 }
@@ -39,4 +39,3 @@ output "cluster_count" {
 output "machine_deployments" {
   value = data.kkp_machine_deployments_v2.by_cluster.machine_deployments
 }
-
