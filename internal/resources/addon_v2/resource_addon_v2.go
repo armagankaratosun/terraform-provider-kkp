@@ -477,17 +477,17 @@ func (r *resourceAddon) Update(ctx context.Context, req resource.UpdateRequest, 
 	if !plan.Variables.IsNull() && !plan.Variables.IsUnknown() {
 		variablesStr := strings.TrimSpace(plan.Variables.ValueString())
 		if variablesStr != "" {
-            variables, err := kkp.JSONToVariables(variablesStr)
-            if err != nil {
-                resp.Diagnostics.AddError("Invalid variables JSON", err.Error())
-                return
-            }
-            if m, ok := variables.(map[string]interface{}); ok {
-                patchAddon.Spec.Variables = m
-            } else {
-                resp.Diagnostics.AddError("Invalid variables JSON", "expected object at top level")
-                return
-            }
+			variables, err := kkp.JSONToVariables(variablesStr)
+			if err != nil {
+				resp.Diagnostics.AddError("Invalid variables JSON", err.Error())
+				return
+			}
+			if m, ok := variables.(map[string]interface{}); ok {
+				patchAddon.Spec.Variables = m
+			} else {
+				resp.Diagnostics.AddError("Invalid variables JSON", "expected object at top level")
+				return
+			}
 		}
 	}
 
@@ -646,7 +646,7 @@ func (r *resourceAddon) waitForAddonReady(ctx context.Context, clusterID, addonI
 		}
 
 		if r.shouldStopPolling(ctx, clusterID, addonID, attempt, pollInterval) {
-            return "failed", "Installation canceled"
+			return "failed", "Installation canceled"
 		}
 	}
 
@@ -717,7 +717,7 @@ func (r *resourceAddon) evaluateAddonStatus(ctx context.Context, clusterID, addo
 func (r *resourceAddon) shouldStopPolling(ctx context.Context, clusterID, addonID string, attempt int, pollInterval time.Duration) bool {
 	select {
 	case <-ctx.Done():
-        tflog.Warn(ctx, "Addon installation monitoring canceled", map[string]any{
+		tflog.Warn(ctx, "Addon installation monitoring canceled", map[string]any{
 			"cluster_id": clusterID,
 			"addon_id":   addonID,
 			"attempts":   attempt,
