@@ -5,7 +5,9 @@ run:
 
 
 linters-settings:
-  govet: {}
+  govet:
+    enable:
+      - shadow
   gocyclo:
     min-complexity: 15
   dupl:
@@ -48,7 +50,6 @@ linters:
     # Error detection
     - errcheck
     - govet
-    - shadow
     - staticcheck
     - ineffassign
     
