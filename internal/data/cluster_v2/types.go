@@ -1,8 +1,9 @@
 package cluster_v2
 
 import (
-	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 )
 
 // ---------- Resource-specific types ----------

@@ -1,8 +1,9 @@
 package application_v2
 
 import (
-	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 	tftypes "github.com/hashicorp/terraform-plugin-framework/types"
+
+	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 )
 
 // ---------- Common fields ----------

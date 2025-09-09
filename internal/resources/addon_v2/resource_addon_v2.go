@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -17,6 +16,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	tftypes "github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+
+	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 
 	acli "github.com/kubermatic/go-kubermatic/client/addon"
 	"github.com/kubermatic/go-kubermatic/models"

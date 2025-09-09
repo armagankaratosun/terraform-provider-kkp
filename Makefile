@@ -1,9 +1,7 @@
-.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-go-s fmt-examples tidy check pre-commit dev release tag tag-push tag-delete tag-repush changelog changelog-release
+.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush
 
 # Variables
 BINARY_NAME=terraform-provider-kkp
-VERSION?=v0.0.1
-PLAIN_VERSION:=$(patsubst v%,%,$(VERSION))
 BUILD_DIR=./bin
 GOOS?=$(shell go env GOOS)
 GOARCH?=$(shell go env GOARCH)
@@ -15,10 +13,11 @@ help: ## Display this help message
 build: ## Build the Terraform provider binary
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-		-ldflags="-X main.version=$(VERSION)" \
-		-o $(BUILD_DIR)/$(BINARY_NAME)_$(VERSION) .
-	@echo "Binary built: $(BUILD_DIR)/$(BINARY_NAME)_$(VERSION)"
+	@V=$${VERSION:-dev}; \
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+		-ldflags="-X main.version=$$V" \
+		-o $(BUILD_DIR)/$(BINARY_NAME)_$$V .; \
+	echo "Binary built: $(BUILD_DIR)/$(BINARY_NAME)_$$V"
 
 test: ## Run all tests
 	@echo "Running tests..."
@@ -48,14 +47,18 @@ clean: ## Clean build artifacts
 	@rm -f coverage.out coverage.html
 
 install: build ## Install the provider binary to local Terraform plugin directory
+	@if [ -z "$(VERSION)" ]; then \
+	  echo "ERROR: VERSION is required for 'make install' (e.g., VERSION=v0.1.0)" >&2; exit 1; \
+	fi
 	@echo "Installing provider locally..."
-	@mkdir -p ~/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$(PLAIN_VERSION)/$(GOOS)_$(GOARCH)/
-	@cp $(BUILD_DIR)/$(BINARY_NAME)_$(VERSION) ~/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$(PLAIN_VERSION)/$(GOOS)_$(GOARCH)/$(BINARY_NAME)_$(VERSION)
-	@echo "Provider installed to ~/.terraform.d/plugins/"
+	@VER_PLAIN=$${VERSION#v}; \
+	mkdir -p $$HOME/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$$VER_PLAIN/$(GOOS)_$(GOARCH)/; \
+	cp $(BUILD_DIR)/$(BINARY_NAME)_$(VERSION) $$HOME/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$$VER_PLAIN/$(GOOS)_$(GOARCH)/$(BINARY_NAME)_$(VERSION); \
+	echo "Provider installed to $$HOME/.terraform.d/plugins/"
 
 deps: dev-deps ## Alias for dev-deps
 
-dev-deps: ## Install development dependencies (golangci-lint, goimports, git-cliff)
+dev-deps: ## Install development dependencies (golangci-lint, goimports)
 	@echo "Installing development dependencies..."
 	@# golangci-lint
 	@export PATH=$$PATH:$$(go env GOPATH)/bin; which golangci-lint >/dev/null 2>&1 || \
@@ -65,45 +68,37 @@ dev-deps: ## Install development dependencies (golangci-lint, goimports, git-cli
 	@export PATH=$$PATH:$$(go env GOPATH)/bin; which goimports >/dev/null 2>&1 || \
 		(echo "Installing goimports..." && \
 		 GOBIN=$$(go env GOPATH)/bin go install golang.org/x/tools/cmd/goimports@latest)
-	@# git-cliff (prebuilt binary)
-	@which git-cliff >/dev/null 2>&1 || \
-	  ( \
-		echo "Installing git-cliff v2.2.1..."; \
-		OS=$$(uname -s); ARCH=$$(uname -m); \
-		case "$$OS/$$ARCH" in \
-		  Linux/x86_64)  ASSET=git-cliff-2.2.1-x86_64-unknown-linux-gnu.tar.gz ;; \
-		  Linux/aarch64|Linux/arm64) ASSET=git-cliff-2.2.1-aarch64-unknown-linux-gnu.tar.gz ;; \
-		  Darwin/x86_64) ASSET=git-cliff-2.2.1-x86_64-apple-darwin.tar.gz ;; \
-		  Darwin/arm64)  ASSET=git-cliff-2.2.1-aarch64-apple-darwin.tar.gz ;; \
-		  *) echo "Unsupported OS/ARCH for git-cliff prebuilt: $$OS/$$ARCH"; ASSET="" ;; \
-		esac; \
-		if [ -n "$$ASSET" ]; then \
-		  TMP=$$(mktemp -d); \
-		  URL="https://github.com/orhun/git-cliff/releases/download/v2.2.1/$$ASSET"; \
-		  echo "Downloading $$URL"; \
-		  curl -sSL -o "$$TMP/git-cliff.tar.gz" "$$URL" && \
-		  tar -xzf "$$TMP/git-cliff.tar.gz" -C "$$TMP"; \
-		  BIN=$$(find "$$TMP" -maxdepth 3 \( -type f -name git-cliff -o -name git-cliff.exe \) | head -n1); \
-		  if [ -z "$$BIN" ]; then echo "git-cliff binary not found in archive"; exit 1; fi; \
-		  mkdir -p "$$HOME/.local/bin" && \
-		  install -m 0755 "$$BIN" "$$HOME/.local/bin/git-cliff" && \
-		  echo "Installed git-cliff to $$HOME/.local/bin. Ensure it is on your PATH."; \
-		fi \
-	  )
 	@echo "Development dependencies installed"
 
-fmt: ## Format Go code
-	@echo "Formatting code..."
+fmt: ## Format Go and Terraform (writes changes)
+	@echo "Formatting Go code..."
 	@go fmt ./...
 	@goimports -w -local github.com/armagankaratosun/terraform-provider-kkp .
+	@if [ -d examples ]; then \
+		echo "Formatting Terraform in examples/..."; \
+		if command -v terraform >/dev/null 2>&1; then \
+		  terraform fmt -recursive examples || true; \
+		else \
+		  echo "Terraform not found; skipping Terraform formatting."; \
+		fi; \
+	      fi
 
-fmt-go-s: ## Run gofmt -s (simplify) across repo
-	@echo "Running gofmt -s ..."
-	@gofmt -s -w .
-
-fmt-examples: ## Run terraform fmt recursively on examples/
-	@echo "Formatting Terraform examples..."
-	@terraform fmt -recursive examples || true
+fmt-check: ## Check formatting (gofmt -s, terraform fmt -check on examples/)
+	@echo "Checking Go formatting (gofmt -s)..."
+	@unformatted=$$(gofmt -s -l .); \
+	  if [ -n "$$unformatted" ]; then \
+	    echo "Files not gofmt'ed:" >&2; \
+	    echo "$$unformatted" >&2; \
+	    exit 1; \
+	  fi
+	@if [ -d examples ]; then \
+		echo "Checking Terraform formatting in examples/..."; \
+		if command -v terraform >/dev/null 2>&1; then \
+		  terraform fmt -check -recursive examples; \
+		else \
+		  echo "Terraform not found; please install Terraform CLI"; exit 1; \
+		fi; \
+	      fi
 
 tidy: ## Tidy up go.mod
 	@echo "Tidying go.mod..."
@@ -119,15 +114,19 @@ dev: clean fmt tidy build ## Full development build (clean, format, tidy, build)
 
 release: clean test lint build ## Release build (clean, test, lint, build)
 
-# Tagging helpers (use v-prefixed VERSION, e.g., VERSION=v0.1.0)
+# Tagging helpers (require v-prefixed VERSION, e.g., VERSION=v0.1.0)
 tag: ## Create an annotated git tag $(VERSION) on HEAD
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION is required (e.g., VERSION=v0.1.0)" >&2; exit 1; fi
+	@case "$(VERSION)" in v*) ;; *) echo "ERROR: VERSION must be v-prefixed (e.g., v0.1.0)" >&2; exit 1;; esac
 	@git tag -a $(VERSION) -m "Release $(VERSION)"
 	@echo "Created tag $(VERSION)"
 
 tag-push: ## Push tag $(VERSION) to origin
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION is required (e.g., VERSION=v0.1.0)" >&2; exit 1; fi
 	@git push origin $(VERSION)
 
 tag-delete: ## Delete local and remote tag $(VERSION)
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION is required (e.g., VERSION=v0.1.0)" >&2; exit 1; fi
 	@echo "Deleting local tag $(VERSION)"
 	@-git tag -d $(VERSION)
 	@echo "Deleting remote tag $(VERSION)"
@@ -136,12 +135,5 @@ tag-delete: ## Delete local and remote tag $(VERSION)
 tag-repush: tag-delete tag ## Delete and recreate tag $(VERSION), then push
 	@$(MAKE) tag-push
 
-# Changelog helpers (requires git-cliff installed locally)
-changelog: ## Generate Unreleased changelog into CHANGELOG.md using git-cliff
-	@git-cliff --unreleased --output CHANGELOG.md
-
-changelog-release: ## Generate CHANGELOG for a release, e.g., make changelog-release VERSION=v0.1.0
-	@test -n "$(VERSION)" || (echo "VERSION is required, e.g., make changelog-release VERSION=v0.1.0" && exit 1)
-	@git-cliff --tag $(VERSION) --output CHANGELOG.md
 
 .DEFAULT_GOAL := help

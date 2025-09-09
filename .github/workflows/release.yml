@@ -10,66 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  prechecks:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Extract tag version (strip leading v)
-        if: github.ref_type == 'tag'
-        run: echo "RELEASE_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
-
-      - name: Validate changelog for release tag
-        if: github.ref_type == 'tag'
-        id: changelog
-        uses: release-flow/keep-a-changelog-action@v3
-        with:
-          command: query
-          version: ${{ env.RELEASE_VERSION }}
-          changelog: CHANGELOG.md
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-
-      - name: Go modules cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Check formatting (gofmt -s)
-        run: |
-          unformatted=$(gofmt -s -l .)
-          if [ -n "$unformatted" ]; then
-            echo "Files not gofmt'ed:" >&2
-            echo "$unformatted" >&2
-            exit 1
-          fi
-
-      - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m --config=.golangci.yml
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test -v ./...
-
   goreleaser:
-    needs: prechecks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -6,8 +6,9 @@ package main
 import (
 	"context"
 
-	"github.com/armagankaratosun/terraform-provider-kkp/internal/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+
+	"github.com/armagankaratosun/terraform-provider-kkp/internal/provider"
 )
 
 var version = "0.0.1"

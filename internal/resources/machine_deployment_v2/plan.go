@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 	"github.com/kubermatic/go-kubermatic/models"
+
+	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 )
 
 // ---------- Defaults & Validation ----------

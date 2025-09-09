@@ -11,9 +11,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
-	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 	pcli "github.com/kubermatic/go-kubermatic/client/project"
 	"github.com/kubermatic/go-kubermatic/models"
+
+	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 )
 
 var _ datasource.DataSource = &dataSourceMachineDeployments{}

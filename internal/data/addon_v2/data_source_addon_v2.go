@@ -5,11 +5,12 @@ import (
 	"context"
 	"sort"
 
-	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dsschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+
+	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 
 	acli "github.com/kubermatic/go-kubermatic/client/addon"
 )

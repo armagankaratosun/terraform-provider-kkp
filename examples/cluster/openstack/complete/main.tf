@@ -32,10 +32,10 @@ resource "kkp_cluster_v2" "cluster" {
     application_credential_id     = var.os_app_cred_id
     application_credential_secret = var.os_app_cred_secret
 
-    network                       = var.os_network
-    subnet_id                     = var.os_subnet_id
-    floating_ip_pool              = var.os_floating_ip_pool
-    security_groups               = var.os_security_groups
+    network          = var.os_network
+    subnet_id        = var.os_subnet_id
+    floating_ip_pool = var.os_floating_ip_pool
+    security_groups  = var.os_security_groups
   }
 
   labels = {
@@ -47,13 +47,13 @@ resource "kkp_machine_deployment_v2" "workers" {
   cluster_id = kkp_cluster_v2.cluster.id
   name       = var.md_name
   replicas   = var.md_replicas
-  cloud = "openstack"
+  cloud      = "openstack"
 
   openstack {
-    flavor            = var.md_os_flavor
-    image             = var.md_os_image
-    use_floating_ip   = var.md_os_use_fip
-    disk_size         = var.md_os_disk_size
+    flavor          = var.md_os_flavor
+    image           = var.md_os_image
+    use_floating_ip = var.md_os_use_fip
+    disk_size       = var.md_os_disk_size
   }
 }
 
