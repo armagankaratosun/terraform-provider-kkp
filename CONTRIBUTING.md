@@ -7,7 +7,7 @@ This document describes how to set up your environment, the branching model, cod
 ## Development Setup
 
 - Go: use the version declared in `go.mod`.
-- Tools: `make dev-deps` installs linters.
+- Tools: `make dev-deps` installs linters and tools (golangci-lint, goimports, git-cliff). You may need to add `$HOME/.local/bin` and `$GOPATH/bin` to your `PATH`.
 - Build: `make build` produces `./bin/terraform-provider-kkp_v<version>`.
 - Format/Lint/Test:
   - `make fmt`
@@ -21,8 +21,8 @@ We keep a human-readable Keep a Changelog file (`CHANGELOG.md`). Entries are gro
 - For each PR, add concise notes under `[Unreleased]` using sections: Added, Changed, Deprecated, Removed, Fixed, Security.
 - CI validates the changelog format and fails PRs with an empty `[Unreleased]`.
 - You can draft/update the changelog using git-cliff:
-  - Locally (requires `git-cliff`): `make changelog` to update `[Unreleased]`, or `make changelog-release VERSION=X.Y.Z` to prepare a release section.
-  - GitHub Actions: run the manual workflow `changelog` and optionally provide `version` (blank = Unreleased).
+  - Locally (requires `git-cliff`): `make changelog` to update `[Unreleased]`, or `make changelog-release VERSION=vX.Y.Z` to prepare a release section.
+  - GitHub Actions: run the manual workflow `changelog` and optionally provide `version` as `vX.Y.Z` (blank = Unreleased).
 
 ## Branching Model
 

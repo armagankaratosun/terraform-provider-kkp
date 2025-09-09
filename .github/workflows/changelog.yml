@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g., 0.1.0). Leave blank to update Unreleased."
+        description: "Release version (e.g., v0.0.1). Leave blank to update Unreleased."
         required: false
         type: string
 
@@ -19,25 +19,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install git-cliff (prebuilt binary)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff@2.2.1
+
       - name: Generate changelog (Unreleased)
         if: ${{ inputs.version == '' }}
-        uses: orhun/git-cliff-action@v3
-        with:
-          config: cliff.toml
-          args: --unreleased --output CHANGELOG.md
+        run: |
+          git-cliff --config cliff.toml --unreleased --output CHANGELOG.md
+
+      - name: Normalize version input to v-prefixed tag
+        if: ${{ inputs.version != '' }}
+        run: |
+          VER="${{ inputs.version }}"
+          VER="${VER#v}"
+          echo "CLIFF_TAG=v${VER}" >> $GITHUB_ENV
+          echo "CLIFF_VERSION=${VER}" >> $GITHUB_ENV
 
       - name: Generate changelog (Release)
         if: ${{ inputs.version != '' }}
-        uses: orhun/git-cliff-action@v3
-        with:
-          config: cliff.toml
-          args: --tag ${{ inputs.version }} --output CHANGELOG.md
+        run: |
+          git-cliff --config cliff.toml --tag "$CLIFF_TAG" --output CHANGELOG.md
 
       - name: Set PR metadata
         run: |
           if [ -n "${{ inputs.version }}" ]; then
-            echo "PR_SUFFIX=v${{ inputs.version }}" >> $GITHUB_ENV
-            echo "BRANCH_SUFFIX=${{ inputs.version }}" >> $GITHUB_ENV
+            echo "PR_SUFFIX=${CLIFF_TAG}" >> $GITHUB_ENV
+            echo "BRANCH_SUFFIX=${CLIFF_VERSION}" >> $GITHUB_ENV
           else
             echo "PR_SUFFIX=Unreleased" >> $GITHUB_ENV
             echo "BRANCH_SUFFIX=unreleased" >> $GITHUB_ENV
