@@ -17,8 +17,7 @@ output:
   print-linter-name: true
 
 linters-settings:
-  govet:
-    shadow: true
+  govet: {}
   gocyclo:
     min-complexity: 15
   dupl:
@@ -46,8 +45,6 @@ linters-settings:
     check-blank: false
   revive:
     rules:
-      - name: package-name
-        disabled: true
       - name: exported
         disabled: true
       - name: package-comments
@@ -65,6 +62,7 @@ linters:
     # Error detection
     - errcheck
     - govet
+    - shadow
     - staticcheck
     - unused
     - ineffassign
