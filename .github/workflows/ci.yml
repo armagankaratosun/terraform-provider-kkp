@@ -12,6 +12,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate changelog (Keep a Changelog)
+        if: github.event_name == 'pull_request'
+        id: changelog
+        uses: release-flow/keep-a-changelog-action@v3
+        with:
+          command: query
+          version: unreleased
+          changelog: CHANGELOG.md
+
+      - name: Ensure Unreleased section has entries
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -z "${{ steps.changelog.outputs.release-notes }}" ]; then
+            echo "CHANGELOG.md [Unreleased] section is empty. Please add entries."
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

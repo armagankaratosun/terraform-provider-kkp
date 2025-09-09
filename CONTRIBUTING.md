@@ -14,9 +14,19 @@ This document describes how to set up your environment, the branching model, cod
   - `make lint`
   - `make test`
 
+## Changelog
+
+We keep a human-readable Keep a Changelog file (`CHANGELOG.md`). Entries are grouped under `[Unreleased]` until a release.
+
+- For each PR, add concise notes under `[Unreleased]` using sections: Added, Changed, Deprecated, Removed, Fixed, Security.
+- CI validates the changelog format and fails PRs with an empty `[Unreleased]`.
+- You can draft/update the changelog using git-cliff:
+  - Locally (requires `git-cliff`): `make changelog` to update `[Unreleased]`, or `make changelog-release VERSION=X.Y.Z` to prepare a release section.
+  - GitHub Actions: run the manual workflow `changelog` and optionally provide `version` (blank = Unreleased).
+
 ## Branching Model
 
-- `main`: active development; always green, reviewed and merge-gated.
+- `main`: active development; keep green. All changes should land via pull requests.
 - `release/v*` (e.g., `release/v0.0.1`): maintenance branch for a specific release line; cherry‑pick fixes as needed.
 - Tags (`vX.Y.Z`): immutable, created from `main` or a `release/v*` branch to cut a release.
 
@@ -41,7 +51,7 @@ Suggested flow:
 
 Releases are built from tags using GitHub Actions and GoReleaser.
 
-1. Update `CHANGELOG.md` under the Unreleased section; add a new `vX.Y.Z` section.
+1. Ensure `CHANGELOG.md` has entries under `[Unreleased]`; when preparing a release, add or generate a new `## [X.Y.Z] - YYYY-MM-DD` section per Keep a Changelog (use git-cliff locally or the `changelog` workflow).
 2. Ensure `main` (or your target `release/v*` branch) is green.
 3. Create and push a semver tag:
    ```bash
@@ -53,6 +63,15 @@ Releases are built from tags using GitHub Actions and GoReleaser.
 Notes:
 - Publishing to the Terraform/OpenTofu registries is not wired up yet; current automation publishes GitHub releases only.
 - The provider binary embeds the version via `-ldflags -X main.version=<tag>`.
+ - The release workflow validates that the tag version exists in `CHANGELOG.md`.
+
+## Branch Protection
+
+The `main` branch is protected. Changes land via PRs with passing CI checks.
+
+Notes:
+- The CI job `ci / lint-test` must pass, which includes changelog validation on PRs.
+- Release tags are validated against `CHANGELOG.md`. Before tagging, ensure a matching `## [X.Y.Z] - YYYY-MM-DD` section exists, or the release workflow will fail.
 
 ## Issue Triage
 

@@ -1,4 +1,4 @@
-.PHONY: help build test lint lint-fix clean install dev-deps fmt fmt-go-s fmt-examples tidy check pre-commit dev release tag tag-push tag-delete tag-repush
+.PHONY: help build test lint lint-fix clean install dev-deps fmt fmt-go-s fmt-examples tidy check pre-commit dev release tag tag-push tag-delete tag-repush changelog changelog-release
 
 # Variables
 BINARY_NAME=terraform-provider-kkp
@@ -100,5 +100,13 @@ tag-delete: ## Delete local and remote tag v$(VERSION)
 
 tag-repush: tag-delete tag ## Delete and recreate tag v$(VERSION), then push
 	@$(MAKE) tag-push
+
+# Changelog helpers (requires git-cliff installed locally)
+changelog: ## Generate Unreleased changelog into CHANGELOG.md using git-cliff
+	@git-cliff --unreleased --output CHANGELOG.md
+
+changelog-release: ## Generate CHANGELOG for a release, e.g., make changelog-release VERSION=0.1.0
+	@test -n "$(VERSION)" || (echo "VERSION is required, e.g., make changelog-release VERSION=0.1.0" && exit 1)
+	@git-cliff --tag $(VERSION) --output CHANGELOG.md
 
 .DEFAULT_GOAL := help

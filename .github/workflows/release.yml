@@ -16,6 +16,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate changelog for release tag
+        if: github.ref_type == 'tag'
+        id: changelog
+        uses: release-flow/keep-a-changelog-action@v3
+        with:
+          command: query
+          # Strip leading 'v' from tag name to match Keep a Changelog version headers
+          version: ${{ startsWith(github.ref_name, 'v') && replace(github.ref_name, 'v', '') || github.ref_name }}
+          changelog: CHANGELOG.md
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
