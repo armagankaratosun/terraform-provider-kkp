@@ -56,8 +56,10 @@ type OpenStack struct {
 
 // AWS represents AWS-specific machine deployment configuration.
 type AWS = kkp.AWS
+
 // VSphere represents VSphere-specific machine deployment configuration.
 type VSphere = kkp.VSphere
+
 // Azure represents Azure-specific machine deployment configuration.
 type Azure = kkp.Azure
 

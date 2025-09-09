@@ -660,7 +660,7 @@ type updateChanges struct {
 	needVersion     bool
 	needMinReplicas bool
 	needMaxReplicas bool
-	
+
 	wantReplicas    int64
 	wantVersion     string
 	wantMinReplicas int64
@@ -676,22 +676,22 @@ func (c *updateChanges) hasChanges() bool {
 func (r *resourceMachineDeployment) detectUpdateChanges(plan, state machineDeploymentState) *updateChanges {
 	wantReplicas := plan.Replicas.ValueInt64()
 	curReplicas := state.Replicas.ValueInt64()
-	
+
 	wantVersion := strings.TrimSpace(plan.K8sVersion.ValueString())
 	curVersion := strings.TrimSpace(state.K8sVersion.ValueString())
-	
+
 	wantMinReplicas := plan.MinReplicas.ValueInt64()
 	curMinReplicas := state.MinReplicas.ValueInt64()
-	
+
 	wantMaxReplicas := plan.MaxReplicas.ValueInt64()
 	curMaxReplicas := state.MaxReplicas.ValueInt64()
-	
+
 	return &updateChanges{
 		needReplicas:    wantReplicas != curReplicas,
 		needVersion:     wantVersion != "" && wantVersion != curVersion,
 		needMinReplicas: wantMinReplicas != curMinReplicas,
 		needMaxReplicas: wantMaxReplicas != curMaxReplicas,
-		
+
 		wantReplicas:    wantReplicas,
 		wantVersion:     wantVersion,
 		wantMinReplicas: wantMinReplicas,
@@ -706,12 +706,12 @@ func (r *resourceMachineDeployment) applyUpdateChanges(ctx context.Context, chan
 	if err != nil {
 		return err
 	}
-	
+
 	// Execute the patch
 	if err := r.executePatch(patchBody, clusterID, id, resp); err != nil {
 		return err
 	}
-	
+
 	// Wait for update to complete
 	return r.waitForUpdateCompletion(ctx, changes, clusterID, id, resp)
 }
@@ -719,7 +719,7 @@ func (r *resourceMachineDeployment) applyUpdateChanges(ctx context.Context, chan
 // buildUpdatePatch builds the patch body for the update operation.
 func (r *resourceMachineDeployment) buildUpdatePatch(changes *updateChanges, resp *resource.UpdateResponse) (map[string]any, error) {
 	spec := map[string]any{}
-	
+
 	if changes.needReplicas {
 		replicas, err := kkp.SafeInt32(changes.wantReplicas)
 		if err != nil {
@@ -728,7 +728,7 @@ func (r *resourceMachineDeployment) buildUpdatePatch(changes *updateChanges, res
 		}
 		spec["replicas"] = replicas
 	}
-	
+
 	if changes.needVersion {
 		spec["template"] = map[string]any{
 			"versions": map[string]any{
@@ -736,7 +736,7 @@ func (r *resourceMachineDeployment) buildUpdatePatch(changes *updateChanges, res
 			},
 		}
 	}
-	
+
 	if changes.needMinReplicas || changes.needMaxReplicas {
 		autoscaling, err := r.buildAutoscalingPatch(changes, resp)
 		if err != nil {
@@ -747,14 +747,14 @@ func (r *resourceMachineDeployment) buildUpdatePatch(changes *updateChanges, res
 			spec["autoscaling"] = autoscaling
 		}
 	}
-	
+
 	return map[string]any{"spec": spec}, nil
 }
 
 // buildAutoscalingPatch builds the autoscaling configuration for the patch.
 func (r *resourceMachineDeployment) buildAutoscalingPatch(changes *updateChanges, resp *resource.UpdateResponse) (map[string]any, error) {
 	autoscaling := map[string]any{}
-	
+
 	if changes.needMinReplicas && changes.wantMinReplicas > 0 {
 		minReplicas, err := kkp.SafeInt32(changes.wantMinReplicas)
 		if err != nil {
@@ -763,7 +763,7 @@ func (r *resourceMachineDeployment) buildAutoscalingPatch(changes *updateChanges
 		}
 		autoscaling["minNodeCount"] = minReplicas
 	}
-	
+
 	if changes.needMaxReplicas && changes.wantMaxReplicas > 0 {
 		maxReplicas, err := kkp.SafeInt32(changes.wantMaxReplicas)
 		if err != nil {
@@ -772,7 +772,7 @@ func (r *resourceMachineDeployment) buildAutoscalingPatch(changes *updateChanges
 		}
 		autoscaling["maxNodeCount"] = maxReplicas
 	}
-	
+
 	return autoscaling, nil
 }
 
@@ -802,7 +802,7 @@ func (r *resourceMachineDeployment) waitForUpdateCompletion(ctx context.Context,
 		"replicas":              changes.wantReplicas,
 		"version":               changes.wantVersion,
 	})
-	
+
 	checker := &kkp.MachineDeploymentHealthChecker{
 		Client:              r.Client,
 		ProjectID:           r.DefaultProjectID,
@@ -810,12 +810,12 @@ func (r *resourceMachineDeployment) waitForUpdateCompletion(ctx context.Context,
 		MachineDeploymentID: id,
 		ExpectedReplicas:    changes.wantReplicas, // Wait for the expected replica count
 	}
-	
+
 	if err := checker.WaitForMachineDeploymentReady(ctx); err != nil {
 		resp.Diagnostics.AddError("Machine deployment update timed out", err.Error())
 		return err
 	}
-	
+
 	return nil
 }
 

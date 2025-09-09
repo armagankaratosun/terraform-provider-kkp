@@ -14,16 +14,16 @@ import (
 
 	data_source_addon_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/addon_v2"
 	data_source_application_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/application_v2"
+	data_source_cluster_template_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/cluster_template_v2"
 	data_source_cluster_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/cluster_v2"
 	data_source_machine_deployment_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/machine_deployment_v2"
 	data_source_ssh_key_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/ssh_key_v2"
-	data_source_cluster_template_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/cluster_template_v2"
 	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
 	resource_addon_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/resources/addon_v2"
 	resource_application_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/resources/application_v2"
-    resource_cluster_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/resources/cluster_v2"
-    resource_machine_deployment_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/resources/machine_deployment_v2"
-    resource_ssh_key_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/resources/ssh_key_v2"
+	resource_cluster_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/resources/cluster_v2"
+	resource_machine_deployment_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/resources/machine_deployment_v2"
+	resource_ssh_key_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/resources/ssh_key_v2"
 )
 
 var _ pframework.Provider = &KKPProvider{}
@@ -130,23 +130,23 @@ func (p *KKPProvider) Configure(ctx context.Context, req pframework.ConfigureReq
 
 // Resources returns the provider's resources.
 func (p *KKPProvider) Resources(_ context.Context) []func() resource.Resource {
-    return []func() resource.Resource{
-        resource_ssh_key_v2.New,
-        resource_cluster_v2.New,
-        resource_machine_deployment_v2.New,
-        resource_addon_v2.New,
-        resource_application_v2.New,
-    }
+	return []func() resource.Resource{
+		resource_ssh_key_v2.New,
+		resource_cluster_v2.New,
+		resource_machine_deployment_v2.New,
+		resource_addon_v2.New,
+		resource_application_v2.New,
+	}
 }
 
 // DataSources returns the provider's data sources.
 func (p *KKPProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-    return []func() datasource.DataSource{
+	return []func() datasource.DataSource{
 		data_source_addon_v2.NewDataSource,
 		data_source_application_v2.NewDataSource,
 		data_source_cluster_v2.NewDataSource,
 		data_source_machine_deployment_v2.NewDataSource,
 		data_source_ssh_key_v2.NewDataSource,
 		data_source_cluster_template_v2.NewDataSource,
-    }
+	}
 }

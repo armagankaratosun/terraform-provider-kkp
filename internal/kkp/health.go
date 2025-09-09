@@ -397,7 +397,7 @@ func (c *MachineDeploymentHealthChecker) checkMachineDeploymentReadiness(ctx con
 func (c *MachineDeploymentHealthChecker) calculateExpectedReplicas(status *models.MachineDeploymentStatus) (int32, error) {
 	// Default: use desired replicas from API
 	expectedReplicas := status.Replicas
-	
+
 	if c.ExpectedReplicas > 0 {
 		safeReplicas, err := SafeInt32(c.ExpectedReplicas)
 		if err != nil {

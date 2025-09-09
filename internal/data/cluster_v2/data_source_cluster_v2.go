@@ -106,14 +106,14 @@ func (d *dataSourceClusters) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	clusters := convertClustersToSummaries(clustersPayload)
-	
+
 	state := clustersDataSourceModel{
 		ID:       types.StringValue("clusters-" + d.DefaultProjectID),
 		Clusters: clusters,
 	}
 
 	tflog.Info(ctx, "successfully listed clusters", map[string]any{
-		"project_id":     d.DefaultProjectID,
+		"project_id":    d.DefaultProjectID,
 		"cluster_count": len(clusters),
 	})
 
@@ -122,7 +122,7 @@ func (d *dataSourceClusters) Read(ctx context.Context, req datasource.ReadReques
 
 func convertClustersToSummaries(clusters []*models.Cluster) []clusterSummary {
 	summaries := make([]clusterSummary, 0, len(clusters))
-	
+
 	for _, cluster := range clusters {
 		if cluster == nil {
 			continue

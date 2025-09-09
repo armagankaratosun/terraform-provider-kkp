@@ -53,7 +53,7 @@ func (p *Plan) Validate() error {
 
 func (p *Plan) validateCloudConfig() error {
 	usingPreset := strings.TrimSpace(p.Preset) != ""
-	
+
 	// Generic validation: cloud blocks are optional with preset, required without
 	switch p.Cloud {
 	case kkp.CloudOpenStack:
@@ -122,10 +122,10 @@ func (p *Plan) ToCreateSpec(ctx context.Context) (*models.CreateClusterSpec, err
 
 func (p *Plan) buildCreateSpec(ctx context.Context) (*models.CreateClusterSpec, error) {
 	type looseSpec struct {
-		Cluster    struct {
+		Cluster struct {
 			Name       string `json:"name"`
 			Credential string `json:"credential,omitempty"`
-			Spec struct {
+			Spec       struct {
 				Version   string `json:"version"`
 				CNIPlugin struct {
 					Type    string `json:"type"`
@@ -181,7 +181,7 @@ func (p *Plan) buildCreateSpec(ctx context.Context) (*models.CreateClusterSpec, 
 				SubnetID                    string `json:"subnetID,omitempty"`
 				FloatingIPPool              string `json:"floatingIPPool,omitempty"`
 			}{}
-			
+
 			os := p.OpenStack
 			los.ApplicationCredentialID = strings.TrimSpace(os.ApplicationCredentialID)
 			los.ApplicationCredentialSecret = strings.TrimSpace(os.ApplicationCredentialSecret)
@@ -216,32 +216,20 @@ func (p *Plan) buildCreateSpec(ctx context.Context) (*models.CreateClusterSpec, 
 			}{}
 		}
 
-	case "aws":
-		if ls.Cluster.Credential == "" {
-			ls.Cluster.Spec.Cloud.Aws = &struct{}{}
-		} else {
-			ls.Cluster.Spec.Cloud.Aws = &struct{}{}
-		}
-	case "vsphere":
-		if ls.Cluster.Credential == "" {
-			ls.Cluster.Spec.Cloud.Vsphere = &struct{}{}
-		} else {
-			ls.Cluster.Spec.Cloud.Vsphere = &struct{}{}
-		}
-	case "azure":
-		if ls.Cluster.Credential == "" {
-			ls.Cluster.Spec.Cloud.Azure = &struct{}{}
-		} else {
-			ls.Cluster.Spec.Cloud.Azure = &struct{}{}
-		}
+	case kkp.CloudAWS:
+		ls.Cluster.Spec.Cloud.Aws = &struct{}{}
+	case kkp.CloudVSphere:
+		ls.Cluster.Spec.Cloud.Vsphere = &struct{}{}
+	case kkp.CloudAzure:
+		ls.Cluster.Spec.Cloud.Azure = &struct{}{}
 	}
 
 	raw, _ := json.Marshal(&ls)
 
 	tflog.Debug(ctx, "KKP API request payload", map[string]any{
-		"json": string(raw),
+		"json":   string(raw),
 		"preset": p.Preset,
-		"cloud": p.Cloud,
+		"cloud":  p.Cloud,
 	})
 
 	var spec models.CreateClusterSpec

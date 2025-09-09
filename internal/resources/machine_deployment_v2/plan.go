@@ -40,7 +40,7 @@ func (p *Plan) Validate() error {
 	if err := kkp.ValidateReplicas(int64(p.Replicas)); err != nil {
 		return err
 	}
-	
+
 	// Convert int32 pointers to int64 pointers for validation
 	var minReplicas, maxReplicas *int64
 	if p.MinReplicas != nil {

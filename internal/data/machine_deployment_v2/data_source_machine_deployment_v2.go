@@ -108,7 +108,7 @@ func (d *dataSourceMachineDeployments) Read(ctx context.Context, req datasource.
 	}
 
 	summaries := d.convertMachineDeploymentsToSummaries(machineDeployments, clusterID)
-	
+
 	state := machineDeploymentsDataSourceModel{
 		ID:                 types.StringValue("machine-deployments-" + clusterID),
 		ClusterID:          types.StringValue(clusterID),
@@ -156,7 +156,7 @@ func (d *dataSourceMachineDeployments) fetchMachineDeployments(clusterID string)
 // convertMachineDeploymentsToSummaries converts API model objects to summary objects.
 func (d *dataSourceMachineDeployments) convertMachineDeploymentsToSummaries(machineDeployments []*models.NodeDeployment, clusterID string) []machineDeploymentSummary {
 	summaries := make([]machineDeploymentSummary, 0, len(machineDeployments))
-	
+
 	for _, md := range machineDeployments {
 		if md == nil {
 			continue

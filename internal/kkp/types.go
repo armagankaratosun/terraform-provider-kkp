@@ -99,11 +99,11 @@ const (
 	// CloudProviderOpenStack represents the OpenStack cloud provider.
 	CloudProviderOpenStack CloudProvider = "openstack"
 	// CloudProviderAWS represents the AWS cloud provider.
-	CloudProviderAWS       CloudProvider = "aws"
+	CloudProviderAWS CloudProvider = "aws"
 	// CloudProviderVSphere represents the VSphere cloud provider.
-	CloudProviderVSphere   CloudProvider = "vsphere"
+	CloudProviderVSphere CloudProvider = "vsphere"
 	// CloudProviderAzure represents the Azure cloud provider.
-	CloudProviderAzure     CloudProvider = "azure"
+	CloudProviderAzure CloudProvider = "azure"
 )
 
 // EmptyCloudConfig represents placeholder for not-yet-implemented cloud providers

@@ -46,6 +46,8 @@ linters-settings:
     check-blank: false
   revive:
     rules:
+      - name: package-name
+        disabled: true
       - name: exported
         disabled: true
       - name: package-comments

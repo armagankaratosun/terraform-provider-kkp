@@ -99,7 +99,7 @@ func (d *dataSourceSSHKeys) Read(ctx context.Context, req datasource.ReadRequest
 	}
 
 	sshKeys := d.convertSSHKeysToSummaries(sshKeysPayload)
-	
+
 	state := sshKeysDataSourceModel{
 		ID:      types.StringValue("ssh-keys-" + d.DefaultProjectID),
 		SSHKeys: sshKeys,
@@ -125,7 +125,7 @@ func (d *dataSourceSSHKeys) fetchSSHKeys() ([]*models.SSHKey, error) {
 
 func (d *dataSourceSSHKeys) convertSSHKeysToSummaries(sshKeys []*models.SSHKey) []sshKeySummary {
 	summaries := make([]sshKeySummary, 0, len(sshKeys))
-	
+
 	for _, sshKey := range sshKeys {
 		if sshKey == nil {
 			continue

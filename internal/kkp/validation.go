@@ -19,15 +19,15 @@ func ValidateCloudProvider(cloud string) error {
 	if strings.TrimSpace(cloud) == "" {
 		return errors.New("cloud provider is required")
 	}
-	
+
 	supportedClouds := []string{"openstack", "aws", "vsphere", "azure"}
 	for _, supported := range supportedClouds {
 		if cloud == supported {
 			return nil
 		}
 	}
-	
-	return fmt.Errorf("unsupported cloud provider %q, must be one of: %s", 
+
+	return fmt.Errorf("unsupported cloud provider %q, must be one of: %s",
 		cloud, strings.Join(supportedClouds, ", "))
 }
 
@@ -47,11 +47,11 @@ func ValidateAutoscaling(minReplicas, maxReplicas *int64) error {
 	if minReplicas == nil && maxReplicas == nil {
 		return nil // No autoscaling configured
 	}
-	
+
 	if minReplicas == nil || maxReplicas == nil {
 		return errors.New("both min_replicas and max_replicas must be set when using autoscaling")
 	}
-	
+
 	if *minReplicas < 1 {
 		return errors.New("min_replicas must be at least 1")
 	}
@@ -61,7 +61,7 @@ func ValidateAutoscaling(minReplicas, maxReplicas *int64) error {
 	if *minReplicas > *maxReplicas {
 		return errors.New("min_replicas cannot be greater than max_replicas")
 	}
-	
+
 	return nil
 }
 

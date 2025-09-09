@@ -1,4 +1,4 @@
-.PHONY: help build test lint lint-fix clean install dev-deps
+.PHONY: help build test lint lint-fix clean install dev-deps fmt fmt-go-s fmt-examples tidy check pre-commit dev release
 
 # Variables
 BINARY_NAME=terraform-provider-kkp
@@ -61,6 +61,14 @@ fmt: ## Format Go code
 	@echo "Formatting code..."
 	@go fmt ./...
 	@goimports -w -local github.com/armagankaratosun/terraform-provider-kkp .
+
+fmt-go-s: ## Run gofmt -s (simplify) across repo
+	@echo "Running gofmt -s ..."
+	@gofmt -s -w .
+
+fmt-examples: ## Run terraform fmt recursively on examples/
+	@echo "Formatting Terraform examples..."
+	@terraform fmt -recursive examples || true
 
 tidy: ## Tidy up go.mod
 	@echo "Tidying go.mod..."

@@ -55,8 +55,10 @@ type OpenStack struct {
 
 // AWS represents AWS-specific cluster configuration.
 type AWS = kkp.AWS
+
 // VSphere represents VSphere-specific cluster configuration.
 type VSphere = kkp.VSphere
+
 // Azure represents Azure-specific cluster configuration.
 type Azure = kkp.Azure
 
@@ -84,23 +86,23 @@ type stateVSphere struct{}
 type stateAzure struct{}
 
 type clusterState struct {
-    ID         tftypes.String `tfsdk:"id"`
-    Name       tftypes.String `tfsdk:"name"`
-    K8sVersion tftypes.String `tfsdk:"k8s_version"`
-    Datacenter tftypes.String `tfsdk:"datacenter"`
-    Preset     tftypes.String `tfsdk:"preset"`
-    Cloud      tftypes.String `tfsdk:"cloud"`
-    CNIType    tftypes.String `tfsdk:"cni_type"`
-    CNIVersion tftypes.String `tfsdk:"cni_version"`
+	ID         tftypes.String `tfsdk:"id"`
+	Name       tftypes.String `tfsdk:"name"`
+	K8sVersion tftypes.String `tfsdk:"k8s_version"`
+	Datacenter tftypes.String `tfsdk:"datacenter"`
+	Preset     tftypes.String `tfsdk:"preset"`
+	Cloud      tftypes.String `tfsdk:"cloud"`
+	CNIType    tftypes.String `tfsdk:"cni_type"`
+	CNIVersion tftypes.String `tfsdk:"cni_version"`
 
-    // Template-based creation (optional)
-    UseTemplate     tftypes.Bool   `tfsdk:"use_template"`
-    TemplateID      tftypes.String `tfsdk:"template_id"`
-    TemplateName    tftypes.String `tfsdk:"template_name"`
-    TemplateReplicas tftypes.Int64 `tfsdk:"template_replicas"`
+	// Template-based creation (optional)
+	UseTemplate      tftypes.Bool   `tfsdk:"use_template"`
+	TemplateID       tftypes.String `tfsdk:"template_id"`
+	TemplateName     tftypes.String `tfsdk:"template_name"`
+	TemplateReplicas tftypes.Int64  `tfsdk:"template_replicas"`
 
-    OpenStack *stateOpenStack `tfsdk:"openstack"`
-    AWS       *stateAWS       `tfsdk:"aws"`
-    VSphere   *stateVSphere   `tfsdk:"vsphere"`
-    Azure     *stateAzure     `tfsdk:"azure"`
+	OpenStack *stateOpenStack `tfsdk:"openstack"`
+	AWS       *stateAWS       `tfsdk:"aws"`
+	VSphere   *stateVSphere   `tfsdk:"vsphere"`
+	Azure     *stateAzure     `tfsdk:"azure"`
 }

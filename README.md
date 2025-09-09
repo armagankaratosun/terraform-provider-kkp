@@ -8,38 +8,9 @@ The Terraform Provider for Kubermatic Kubernetes Platform (KKP) allows you to ma
 
 This provider is currently in active development. APIs may change and some features may not be fully implemented. Use with caution in production environments.
 
-## Requirements
+## Quickstart
 
-- [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.5.0
-- [Go](https://golang.org/doc/install) >= 1.24.1
-
-## Building The Provider
-
-1. Clone the repository
-2. Enter the repository directory
-3. Build the provider using the Make command:
-
-```shell
-make build
-```
-
-## Adding Dependencies
-
-This provider uses [Go modules](https://github.com/golang/go/wiki/Modules).
-Please see the Go documentation for the most up to date information about using Go modules.
-
-To add a new dependency `github.com/author/dependency` to your Terraform provider:
-
-```shell
-go get github.com/author/dependency
-go mod tidy
-```
-
-Then commit the changes to `go.mod` and `go.sum`.
-
-## Using the provider
-
-### Provider Configuration
+1) Configure the provider in `main.tf`:
 
 ```hcl
 terraform {
@@ -52,23 +23,78 @@ terraform {
 }
 
 provider "kkp" {
-  endpoint           = "https://your-kkp.example.com"
-  token             = "your-api-token"
-  project_id        = "your-project-id"
-  insecure_skip_verify = false
+  # Replace with your KKP API endpoint and credentials
+  endpoint             = "https://kkp.example.com"
+  token                = "<your-service-account-token>"
+  project_id           = "<your-project-id>"
+  insecure_skip_verify = false # set true only for dev/self-signed
 }
 ```
 
-### Environment Variables
+2) Minimal OpenStack cluster + workers (adjust inline values as needed):
 
-| Variable | Description |
-|----------|-------------|
-| `KKP_ENDPOINT` | KKP API endpoint URL |
-| `KKP_TOKEN` | KKP API token |
-| `KKP_PROJECT_ID` | Default project ID |
-| `KKP_INSECURE_SKIP_VERIFY` | Skip TLS verification (default: false) |
+```hcl
+resource "kkp_cluster_v2" "cluster" {
+  name        = "quickstart-cluster"     # change if you like
+  k8s_version = "1.29.0"                  # use a supported version
+  datacenter  = "openstack-eu-west"       # your KKP datacenter name
+  cloud       = "openstack"
 
-## Developing the Provider
+  openstack {
+    application_credential_id     = "<app-credential-id>"     # required when not using presets
+    application_credential_secret = "<app-credential-secret>" # required when not using presets
+    network                       = "private"                 # neutron network name or ID
+    subnet_id                     = "<subnet-id>"             # IPv4 subnet ID
+    floating_ip_pool              = "public"                  # external network / FIP pool
+    security_groups               = "default"                 # security group name or ID
+  }
+}
+
+resource "kkp_machine_deployment_v2" "workers" {
+  cluster_id = kkp_cluster_v2.cluster.id
+  name       = "workers"
+  replicas   = 3
+  cloud      = "openstack"
+
+  openstack {
+    flavor          = "m1.medium"      # pick a valid flavor
+    image           = "Ubuntu 22.04"   # pick a valid image name/UUID
+    use_floating_ip = true
+    disk_size       = 50               # GB
+  }
+}
+```
+
+3) Initialize and apply:
+
+```bash
+terraform init
+terraform apply
+```
+
+For more detailed examples, see the [Examples](#examples) section below.
+
+## Examples
+
+See runnable configurations under [Examples](examples/README.md) for various use cases.
+
+- [OpenStack Cluster Examples](examples/cluster/openstack/README.md)
+- [Addon Install](examples/addons/README.md) – Install an addon into an existing cluster.
+- [Application Install](examples/applications/README.md) – Install a catalog application into an existing cluster.
+- [Data Sources](examples/data-sources/README.md) – Read-only listing of keys, clusters, MDs, addons, applications, templates.
+
+
+### Discovering Options
+- Addons: Use `data "kkp_addons_v2"` with a `cluster_id` to list `available` addon names for that cluster (see `examples/data-sources/`). Then set `addon_name` in `examples/addons/` to install one.
+- Applications: Use `data "kkp_applications_v2"` with a `cluster_id` to see what’s installed (see `examples/data-sources/`). Application catalog entries (name/version) come from your KKP setup; pick a valid `application_name`/`application_version` and apply via `examples/applications/`.
+
+## Development
+
+### Overview
+Requirements for developing and testing this provider:
+
+- Terraform >= 1.5.0 (to run examples and local testing)
+- Go >= 1.24.1 (to build, lint, and run tests)
 
 If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
 
@@ -99,7 +125,7 @@ Run all pre-commit checks (format, lint, test):
 $ make pre-commit
 ```
 
-## Testing the Provider
+### Testing
 
 In order to test the provider, you can simply run `make test`.
 
@@ -121,7 +147,7 @@ In order to run the full suite of Acceptance tests, run `make testacc`.
 $ make testacc
 ```
 
-## Installing the Provider Locally
+### Installing Locally
 
 To install the provider locally for development:
 
@@ -131,14 +157,14 @@ $ make install
 
 This will install the provider to `~/.terraform.d/plugins/registry.opentofu.org/armagankaratosun/kkp/`.
 
-## Branching model
+### Branching model
 
 These are the branches used in this repository:
 
 * `main` represents the current release
 * `release/v*` (e.g. `release/v0.1`) represents the latest state of a particular release branch. These branches are created when needed from `main`
 
-## Release
+### Release
 
 This provider is automatically released using GitHub Actions and [GoReleaser](https://goreleaser.com/) when a tag is pushed to the repository.
 
@@ -150,6 +176,26 @@ To release a new version:
    git push origin vX.Y.Z
    ```
 3. The release will be automatically built and published to the Terraform Registry.
+
+### Make Targets
+
+| Target | Description |
+|--------|-------------|
+| `help` | Display available make targets |
+| `build` | Build the Terraform provider binary |
+| `test` | Run all tests |
+| `test-coverage` | Run tests with coverage report |
+| `lint` | Run linting with golangci-lint |
+| `lint-fix` | Run linting with auto-fix where possible |
+| `clean` | Clean build artifacts |
+| `install` | Install the provider binary locally |
+| `dev-deps` | Install development dependencies |
+| `fmt` | Format Go code |
+| `tidy` | Tidy up go.mod |
+| `check` | Run both linting and tests |
+| `pre-commit` | Run pre-commit checks (format, tidy, lint, test) |
+| `dev` | Full development build (clean, format, tidy, build) |
+| `release` | Release build (clean, test, lint, build) |
 
 ## Supported Resources & Cloud Providers
 
@@ -197,83 +243,6 @@ Currently **OpenStack only**:
 **Status:** 🚧 **Beta** - Fully functional for OpenStack, other cloud providers not yet implemented.
 
 **Future:** Additional cloud providers (AWS, Azure, vSphere, GCP) may be added based on community demand.
-
-## Example Usage
-
-```hcl
-terraform {
-  required_providers {
-    kkp = {
-      source  = "armagankaratosun/kkp"
-      version = "~> 0.1"
-    }
-  }
-}
-
-provider "kkp" {
-  endpoint   = "https://kkp.example.com"
-  token      = var.kkp_token
-  project_id = var.project_id
-}
-
-resource "kkp_cluster_v2" "example" {
-  name       = "example-cluster"
-  version    = "1.29.0"
-  datacenter = "openstack-eu-west"
-  
-  cloud = "openstack"
-  
-  openstack {
-    application_credential_id     = var.openstack_app_cred_id
-    application_credential_secret = var.openstack_app_cred_secret
-    domain                       = "default"
-    network                      = "public"
-    subnet_id                    = var.openstack_subnet_id
-    floating_ip_pool             = "public"
-    security_groups              = "default"
-  }
-  
-  labels = {
-    environment = "test"
-  }
-}
-
-resource "kkp_machine_deployment_v2" "workers" {
-  cluster_id = kkp_cluster_v2.example.id
-  name       = "worker-nodes"
-  replicas   = 3
-  
-  cloud = "openstack"
-  
-  openstack {
-    flavor             = "m1.medium"
-    image              = "Ubuntu 22.04"
-    use_floating_ip    = true
-    disk_size          = 50
-    availability_zone  = "nova"
-  }
-}
-```
-
-## Make Targets
-
-| Target | Description |
-|--------|-------------|
-| `help` | Display available make targets |
-| `build` | Build the Terraform provider binary |
-| `test` | Run all tests |
-| `test-coverage` | Run tests with coverage report |
-| `lint` | Run linting with golangci-lint |
-| `lint-fix` | Run linting with auto-fix where possible |
-| `clean` | Clean build artifacts |
-| `install` | Install the provider binary locally |
-| `dev-deps` | Install development dependencies |
-| `fmt` | Format Go code |
-| `tidy` | Tidy up go.mod |
-| `check` | Run both linting and tests |
-| `pre-commit` | Run pre-commit checks (format, tidy, lint, test) |
-| `dev` | Full development build (clean, format, tidy, build) |
-| `release` | Release build (clean, test, lint, build) |
 
 ## Contributing
 
