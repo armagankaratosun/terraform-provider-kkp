@@ -38,3 +38,5 @@ bin/
 .*
 !.gitignore
 !.golangci.yml
+!.goreleaser.yaml
+!.github/
