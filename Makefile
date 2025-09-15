@@ -1,4 +1,4 @@
-.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush docs docs-check release-pr release-pr-watch snapshot
+.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush docs docs-check snapshot
 
 # Variables
 BINARY_NAME=terraform-provider-kkp
@@ -181,18 +181,6 @@ tag-repush: tag-delete tag ## Delete and recreate tag $(VERSION), then push
 
 
 .DEFAULT_GOAL := help
-# Release automation helpers
-release-pr: ## Trigger Release Please workflow to open/update a release PR
-	@command -v gh >/dev/null 2>&1 || { echo "GitHub CLI (gh) is required: https://cli.github.com" >&2; exit 1; }
-	@branch=$$(git rev-parse --abbrev-ref HEAD); \
-	echo "Triggering release-please on branch $$branch..."; \
-	gh workflow run release-please.yml -f ref=$$branch || gh workflow run release-please.yml
-	@echo "Use 'make release-pr-watch' to watch the run or check the Actions tab."
-
-release-pr-watch: ## Watch latest Release Please workflow run
-	@command -v gh >/dev/null 2>&1 || { echo "GitHub CLI (gh) is required: https://cli.github.com" >&2; exit 1; }
-	@gh run list -w release-please -L 1
-	@gh run watch --exit-status
 
 snapshot: ## Build snapshot artifacts locally with GoReleaser (no publish)
 	@command -v goreleaser >/dev/null 2>&1 || { echo "Installing goreleaser..."; \

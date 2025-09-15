@@ -69,22 +69,26 @@ Suggested flow:
 Releases are built from tags using GitHub Actions and GoReleaser. Release notes are generated from git history on GitHub Releases.
 
 1. Ensure `main` (or your target `release/v*` branch) is green.
-2. Prefer automated versioning with Release Please: push merges to `main` using Conventional Commits. The `release-please` workflow will open a release PR with a version bump and changelog. Merge that PR to create the tag.
-3. Alternatively, create and push a semver tag (v-prefixed):
+2. Create and push a semver tag (v‑prefixed) using Makefile helpers:
    ```bash
-   git tag vX.Y.Z
-   git push origin vX.Y.Z
+   make tag VERSION=vX.Y.Z
+   make tag-push VERSION=vX.Y.Z
    ```
-4. GitHub Actions (GoReleaser) builds artifacts for multiple OS/ARCH and publishes the GitHub Release. Changelog sections are grouped by Conventional Commit types.
+   If you need to fix a tag, use:
+   ```bash
+   make tag-repush VERSION=vX.Y.Z
+   ```
+   Alternatively, you can do it manually:
+   ```bash
+   git tag vX.Y.Z && git push origin vX.Y.Z
+   ```
+3. GitHub Actions (GoReleaser) builds artifacts for multiple OS/ARCH and publishes the GitHub Release. Changelog sections are grouped by Conventional Commit types.
 
 Notes:
 - Publishing to the Terraform/OpenTofu registries is not wired up yet; current automation publishes GitHub releases only.
 - The provider binary embeds the version via `-ldflags -X main.version=<tag>`.
  - The provider binary embeds the registry address at build time; we build artifacts for both Terraform and OpenTofu registries.
 
-### Version bump linting
-
-We use Conventional Commits + Release Please instead of manual version bumps. As long as your commits are typed (feat, fix, perf, refactor, docs, build, ci) and you merge to `main`, the `release-please` workflow will propose the next version and changelog.
 
 ## Branch Protection
 
