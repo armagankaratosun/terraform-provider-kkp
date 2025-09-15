@@ -119,6 +119,25 @@ func (p *KKPProvider) Configure(ctx context.Context, req pframework.ConfigureReq
 		})
 	}
 
+	// Best-effort: check server version and warn on incompatible minor series
+	if ver, verr := client.GetServerVersion(ctx); verr == nil {
+		minor := kkp.ExtractMinor(ver)
+		if minor != "" && minor != kkp.SupportedKKPMinor {
+			tflog.Warn(ctx, "KKP server version may be incompatible", map[string]any{
+				"server_version":  ver,
+				"server_minor":    minor,
+				"supported_minor": kkp.SupportedKKPMinor,
+			})
+		} else {
+			tflog.Info(ctx, "KKP server version detected", map[string]any{
+				"server_version": ver,
+			})
+		}
+	} else {
+		// Non-fatal; endpoint may not expose a public version route
+		tflog.Debug(ctx, "KKP version check skipped", map[string]any{"error": verr.Error()})
+	}
+
 	meta := &kkp.ProviderMeta{
 		Client:           client,
 		DefaultProjectID: projectID,

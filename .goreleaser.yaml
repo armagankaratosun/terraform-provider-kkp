@@ -1,3 +1,4 @@
+version: 2
 project_name: terraform-provider-kkp
 
 before:
@@ -14,13 +15,33 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w -X main.version={{.Version}} -X main.providerAddress=registry.terraform.io/armagankaratosun/kkp
+  - id: provider-tofu
+    main: ./
+    binary: terraform-provider-kkp
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.providerAddress=registry.opentofu.org/armagankaratosun/kkp
 
 archives:
   - id: archive
-    builds: [provider]
+    ids: [provider]
     name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
+    format: tar.gz
+    overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+  - id: archive_tofu
+    ids: [provider-tofu]
+    name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}_tofu"
+    format: tar.gz
+    overrides:
       - goos: windows
         format: zip
     files:
@@ -35,5 +56,36 @@ release:
   prerelease: auto
 
 changelog:
-  sort: asc
   use: git
+  sort: asc
+  groups:
+    - title: Breaking Changes
+      regexp: '(^.+!:)|(BREAKING CHANGE)'
+      order: 0
+    - title: Features
+      regexp: '^feat(\(.+\))?:'
+      order: 10
+    - title: Fixes
+      regexp: '^fix(\(.+\))?:'
+      order: 20
+    - title: Performance
+      regexp: '^perf(\(.+\))?:'
+      order: 30
+    - title: Refactor
+      regexp: '^refactor(\(.+\))?:'
+      order: 40
+    - title: Docs
+      regexp: '^docs(\(.+\))?:'
+      order: 50
+    - title: CI/Build
+      regexp: '^(ci|build)(\(.+\))?:'
+      order: 60
+  filters:
+    exclude:
+      - '^chore(\(.+\))?:'
+      - '^test(\(.+\))?:'
+      - '^revert(\(.+\))?:'
+      - 'Merge pull request'
+      - 'Merge branch'
+      - '^bump'
+      - '^release:'

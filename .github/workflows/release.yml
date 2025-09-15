@@ -23,6 +23,22 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Install tfplugindocs
+        if: github.ref_type == 'tag'
+        run: |
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
+
+      - name: Verify docs up-to-date (make docs)
+        if: github.ref_type == 'tag'
+        run: |
+          make docs
+          if ! git diff --quiet -- docs; then
+            echo "Docs are outdated for this release tag. Run 'make docs' and commit before tagging." >&2
+            git --no-pager diff -- docs || true
+            exit 1
+          fi
+
       - name: Run GoReleaser (tagged release)
         if: github.ref_type == 'tag'
         uses: goreleaser/goreleaser-action@v6

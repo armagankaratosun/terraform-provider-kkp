@@ -49,7 +49,7 @@ func fromAPIProjectSSHKey(p *models.SSHKey) projectSSHKeyState {
 }
 
 func (r *resourceSSHKey) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_project_sshkey"
+    resp.TypeName = req.ProviderTypeName + "_ssh_key_v2"
 }
 
 func (r *resourceSSHKey) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {

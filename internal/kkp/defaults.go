@@ -32,6 +32,9 @@ const (
 	StatusReady      = "ready"
 	StatusInstalling = "installing"
 
+	// KKP compatibility (minor series)
+	SupportedKKPMinor = "2.28"
+
 	// Value constants
 	NullValue = "null"
 )

@@ -1,4 +1,4 @@
-.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush
+.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush docs docs-check release-pr release-pr-watch snapshot
 
 # Variables
 BINARY_NAME=terraform-provider-kkp
@@ -114,6 +114,50 @@ dev: clean fmt tidy build ## Full development build (clean, format, tidy, build)
 
 release: clean test lint build ## Release build (clean, test, lint, build)
 
+# Documentation
+docs: ## Generate provider docs with tfplugindocs
+	@echo "Generating provider docs with tfplugindocs..."
+	@command -v tfplugindocs >/dev/null 2>&1 || { \
+	  echo "tfplugindocs not found." >&2; \
+	  echo "Install with: go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest" >&2; \
+	  exit 1; \
+	}
+	@tfplugindocs generate
+	@echo "Post-processing docs index with dynamic lists..."
+	@rlist=$$(mktemp); dlist=$$(mktemp); \
+	for f in docs/resources/*.md; do \
+	  [ -f "$$f" ] || continue; \
+	  title=$$(awk '/^# kkp_/ {print substr($$0,3); exit}' "$$f"); \
+	  if [ -z "$$title" ]; then base=$$(basename "$$f" .md); title="$$base"; fi; \
+	  rel=$${f#docs/}; \
+	  printf '%s|%s\n' "$$title" "$$rel"; \
+	done | sort -f | awk -F'|' '{printf "- [%s](%s)\n",$$1,$$2}' > "$$rlist"; \
+	for f in docs/data-sources/*.md; do \
+	  [ -f "$$f" ] || continue; \
+	  title=$$(awk '/^# kkp_/ {print substr($$0,3); exit}' "$$f"); \
+	  if [ -z "$$title" ]; then base=$$(basename "$$f" .md); title="$$base"; fi; \
+	  rel=$${f#docs/}; \
+	  printf '%s|%s\n' "$$title" "$$rel"; \
+	done | sort -f | awk -F'|' '{printf "- [%s](%s)\n",$$1,$$2}' > "$$dlist"; \
+	tmp_file=$$(mktemp); \
+	awk -v RLIST="$$rlist" -v DLIST="$$dlist" '\
+	  BEGIN { in_res=0; in_ds=0; } \
+	  /^<!-- BEGIN RESOURCES LIST -->/ { print; in_res=1; while ((getline line < RLIST) > 0) print line; close(RLIST); next } \
+	  /^<!-- END RESOURCES LIST -->/ { print; in_res=0; next } \
+	  /^<!-- BEGIN DATA SOURCES LIST -->/ { print; in_ds=1; while ((getline line < DLIST) > 0) print line; close(DLIST); next } \
+	  /^<!-- END DATA SOURCES LIST -->/ { print; in_ds=0; next } \
+	  { if (!in_res && !in_ds) print }' docs/index.md > $$tmp_file; \
+	mv $$tmp_file docs/index.md; \
+	rm -f "$$rlist" "$$dlist"
+
+docs-check: ## Verify docs are up-to-date (fails if changes)
+	@echo "Checking provider docs are up-to-date..."
+	@git diff --quiet -- docs || { \
+	  echo "Docs are outdated. Run 'make docs' to regenerate." >&2; \
+	  git --no-pager diff -- docs; \
+	  exit 1; \
+	}
+
 # Tagging helpers (require v-prefixed VERSION, e.g., VERSION=v0.1.0)
 tag: ## Create an annotated git tag $(VERSION) on HEAD
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION is required (e.g., VERSION=v0.1.0)" >&2; exit 1; fi
@@ -137,3 +181,20 @@ tag-repush: tag-delete tag ## Delete and recreate tag $(VERSION), then push
 
 
 .DEFAULT_GOAL := help
+# Release automation helpers
+release-pr: ## Trigger Release Please workflow to open/update a release PR
+	@command -v gh >/dev/null 2>&1 || { echo "GitHub CLI (gh) is required: https://cli.github.com" >&2; exit 1; }
+	@branch=$$(git rev-parse --abbrev-ref HEAD); \
+	echo "Triggering release-please on branch $$branch..."; \
+	gh workflow run release-please.yml -f ref=$$branch || gh workflow run release-please.yml
+	@echo "Use 'make release-pr-watch' to watch the run or check the Actions tab."
+
+release-pr-watch: ## Watch latest Release Please workflow run
+	@command -v gh >/dev/null 2>&1 || { echo "GitHub CLI (gh) is required: https://cli.github.com" >&2; exit 1; }
+	@gh run list -w release-please -L 1
+	@gh run watch --exit-status
+
+snapshot: ## Build snapshot artifacts locally with GoReleaser (no publish)
+	@command -v goreleaser >/dev/null 2>&1 || { echo "Installing goreleaser..."; \
+		GO111MODULE=on go install github.com/goreleaser/goreleaser/v2@latest; }
+	@GOCACHE=$(PWD)/.cache/gobuild GOMODCACHE=$(PWD)/.cache/gomod goreleaser release --clean --snapshot --skip=publish
