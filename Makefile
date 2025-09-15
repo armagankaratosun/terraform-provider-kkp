@@ -1,4 +1,4 @@
-.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush docs docs-check snapshot
+.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush docs docs-check snapshot examples-validate examples-bump-version examples-version-check
 
 # Variables
 BINARY_NAME=terraform-provider-kkp
@@ -104,6 +104,29 @@ tidy: ## Tidy up go.mod
 	@echo "Tidying go.mod..."
 	@go mod tidy
 
+# Examples
+examples-validate: ## Validate all examples with terraform init/validate (no backend)
+	@echo "Validating Terraform examples..."
+	@command -v terraform >/dev/null 2>&1 || { echo "Terraform CLI is required for example validation" >&2; exit 1; }
+	@set -e; \
+	find examples -type f -name 'main.tf' | while read -r f; do \
+	  d=$$(dirname "$$f"); \
+	  echo "==> $$d"; \
+	  (cd "$$d" && terraform init -backend=false -input=false -upgrade >/dev/null && terraform validate -no-color); \
+	done; \
+	echo "All examples validated."
+
+# Usage: make examples-bump-version EXAMPLES_VERSION=0.1.0
+examples-bump-version: ## Bump provider version constraint in examples (EXAMPLES_VERSION=0.1.0)
+	@if [ -z "$(EXAMPLES_VERSION)" ]; then echo "ERROR: EXAMPLES_VERSION is required (e.g., EXAMPLES_VERSION=0.1.0)" >&2; exit 1; fi
+	@echo "Bumping examples provider version to ~> $(EXAMPLES_VERSION) ..."
+	@find examples -type f -name 'main.tf' -print0 | xargs -0 sed -i.bak -E 's/(version\s*=\s*")(~>\s*)?[^\"]+(\".*)/\1~> $(EXAMPLES_VERSION)\3/'; \
+	find examples -type f -name '*.bak' -delete; \
+	echo "Done. Run 'make examples-version-check' to verify."
+
+examples-version-check: ## Print current provider version constraints used in examples
+	@rg -n "required_providers|source\s*=\s*\"armagankaratosun/kkp\"|version\s*=\s*\"~>" examples -S || true
+
 check: lint test ## Run both linting and tests
 
 pre-commit: fmt tidy lint test ## Run pre-commit checks (format, tidy, lint, test)
@@ -114,6 +137,8 @@ dev: clean fmt tidy build ## Full development build (clean, format, tidy, build)
 
 release: clean test lint build ## Release build (clean, test, lint, build)
 
+.PHONY: docs docs-full
+
 # Documentation
 docs: ## Generate provider docs with tfplugindocs
 	@echo "Generating provider docs with tfplugindocs..."
@@ -123,32 +148,8 @@ docs: ## Generate provider docs with tfplugindocs
 	  exit 1; \
 	}
 	@tfplugindocs generate
-	@echo "Post-processing docs index with dynamic lists..."
-	@rlist=$$(mktemp); dlist=$$(mktemp); \
-	for f in docs/resources/*.md; do \
-	  [ -f "$$f" ] || continue; \
-	  title=$$(awk '/^# kkp_/ {print substr($$0,3); exit}' "$$f"); \
-	  if [ -z "$$title" ]; then base=$$(basename "$$f" .md); title="$$base"; fi; \
-	  rel=$${f#docs/}; \
-	  printf '%s|%s\n' "$$title" "$$rel"; \
-	done | sort -f | awk -F'|' '{printf "- [%s](%s)\n",$$1,$$2}' > "$$rlist"; \
-	for f in docs/data-sources/*.md; do \
-	  [ -f "$$f" ] || continue; \
-	  title=$$(awk '/^# kkp_/ {print substr($$0,3); exit}' "$$f"); \
-	  if [ -z "$$title" ]; then base=$$(basename "$$f" .md); title="$$base"; fi; \
-	  rel=$${f#docs/}; \
-	  printf '%s|%s\n' "$$title" "$$rel"; \
-	done | sort -f | awk -F'|' '{printf "- [%s](%s)\n",$$1,$$2}' > "$$dlist"; \
-	tmp_file=$$(mktemp); \
-	awk -v RLIST="$$rlist" -v DLIST="$$dlist" '\
-	  BEGIN { in_res=0; in_ds=0; } \
-	  /^<!-- BEGIN RESOURCES LIST -->/ { print; in_res=1; while ((getline line < RLIST) > 0) print line; close(RLIST); next } \
-	  /^<!-- END RESOURCES LIST -->/ { print; in_res=0; next } \
-	  /^<!-- BEGIN DATA SOURCES LIST -->/ { print; in_ds=1; while ((getline line < DLIST) > 0) print line; close(DLIST); next } \
-	  /^<!-- END DATA SOURCES LIST -->/ { print; in_ds=0; next } \
-	  { if (!in_res && !in_ds) print }' docs/index.md > $$tmp_file; \
-	mv $$tmp_file docs/index.md; \
-	rm -f "$$rlist" "$$dlist"
+
+docs-full: docs ## Generate docs (alias)
 
 docs-check: ## Verify docs are up-to-date (fails if changes)
 	@echo "Checking provider docs are up-to-date..."

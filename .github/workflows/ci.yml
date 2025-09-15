@@ -57,6 +57,22 @@ jobs:
             echo "No examples/ directory; skipping terraform fmt check"
           fi
 
+      - name: Validate examples (terraform validate)
+        run: make examples-validate
+
+      - name: Validate examples (terraform validate)
+        run: |
+          set -euo pipefail
+          if [ -d examples ]; then
+            find examples -type f -name 'main.tf' | while read -r f; do
+              d=$(dirname "$f")
+              echo "==> Validating $d"
+              (cd "$d" && terraform init -backend=false -input=false -upgrade && terraform validate -no-color)
+            done
+          else
+            echo "No examples/ directory; skipping terraform validate"
+          fi
+
       - name: Check formatting (gofmt -s)
         run: |
           unformatted=$(gofmt -s -l .)
