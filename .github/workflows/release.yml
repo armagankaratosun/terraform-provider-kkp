@@ -30,21 +30,12 @@ jobs:
           go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
 
       - name: Import GPG key (optional)
+        id: import_gpg
         if: ${{ github.ref_type == 'tag' && secrets.GPG_PRIVATE_KEY != '' }}
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          # Prefer base64-encoded secret; fallback to plain armored import
-          if echo "$GPG_PRIVATE_KEY" | base64 -d >/tmp/gpg.key 2>/dev/null; then
-            gpg --batch --import /tmp/gpg.key
-            rm -f /tmp/gpg.key
-          else
-            printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
-          fi
-          # Export fingerprint for signing
-          KEY_ID=$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^sec:/{print $5; exit}')
-          echo "GPG_FINGERPRINT=$KEY_ID" >> "$GITHUB_ENV"
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Verify docs up-to-date (make docs)
         if: ${{ github.ref_type == 'tag' }}
@@ -66,6 +57,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
 
       - name: Run GoReleaser (snapshot on manual/branch run)
         if: ${{ github.ref_type != 'tag' }}
