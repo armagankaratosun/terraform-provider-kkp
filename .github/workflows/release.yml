@@ -24,13 +24,13 @@ jobs:
           go-version-file: 'go.mod'
 
       - name: Install tfplugindocs
-        if: github.ref_type == 'tag'
+        if: ${{ github.ref_type == 'tag' }}
         run: |
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
 
       - name: Import GPG key (optional)
-        if: github.ref_type == 'tag' && secrets.GPG_PRIVATE_KEY != ''
+        if: ${{ github.ref_type == 'tag' && secrets.GPG_PRIVATE_KEY != '' }}
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -47,7 +47,7 @@ jobs:
           echo "GPG_FINGERPRINT=$KEY_ID" >> "$GITHUB_ENV"
 
       - name: Verify docs up-to-date (make docs)
-        if: github.ref_type == 'tag'
+        if: ${{ github.ref_type == 'tag' }}
         run: |
           make docs
           if ! git diff --quiet -- docs; then
@@ -57,7 +57,7 @@ jobs:
           fi
 
       - name: Run GoReleaser (tagged release)
-        if: github.ref_type == 'tag'
+        if: ${{ github.ref_type == 'tag' }}
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
@@ -68,7 +68,7 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Run GoReleaser (snapshot on manual/branch run)
-        if: github.ref_type != 'tag'
+        if: ${{ github.ref_type != 'tag' }}
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
