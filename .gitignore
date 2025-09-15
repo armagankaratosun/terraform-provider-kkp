@@ -33,6 +33,7 @@ go.work.sum
 
 # Build artifacts
 bin/
+dist/
 
 # Hidden files and directories
 .*
