@@ -9,35 +9,19 @@ before:
 builds:
   - id: provider
     main: ./
-    binary: terraform-provider-kkp
+    binary: "terraform-provider-kkp_v{{ .Version }}"
     env:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.providerAddress=registry.terraform.io/armagankaratosun/kkp
-  - id: provider-tofu
-    main: ./
-    binary: terraform-provider-kkp
-    env:
-      - CGO_ENABLED=0
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.providerAddress=registry.opentofu.org/armagankaratosun/kkp
 
 archives:
   - id: archive
     ids: [provider]
     # Terraform Registry expects zip and version without leading 'v'
     name_template: "{{ .ProjectName }}_{{ trimprefix .Version \"v\" }}_{{ .Os }}_{{ .Arch }}"
-    format: zip
-    files:
-      - LICENSE
-      - README.md
-  - id: archive_tofu
-    ids: [provider-tofu]
-    name_template: "{{ .ProjectName }}_{{ trimprefix .Version \"v\" }}_{{ .Os }}_{{ .Arch }}_tofu"
     format: zip
     files:
       - LICENSE
