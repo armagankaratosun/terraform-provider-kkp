@@ -29,27 +29,43 @@ builds:
 archives:
   - id: archive
     ids: [provider]
-    name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
-    format_overrides:
-      - goos: windows
-        format: zip
+    # Terraform Registry expects zip and version without leading 'v'
+    name_template: "{{ .ProjectName }}_{{ trimprefix .Version \"v\" }}_{{ .Os }}_{{ .Arch }}"
+    format: zip
     files:
       - LICENSE
       - README.md
   - id: archive_tofu
     ids: [provider-tofu]
-    name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}_tofu"
-    format: tar.gz
-    format_overrides:
-      - goos: windows
-        format: zip
+    name_template: "{{ .ProjectName }}_{{ trimprefix .Version \"v\" }}_{{ .Os }}_{{ .Arch }}_tofu"
+    format: zip
     files:
       - LICENSE
       - README.md
 
 checksum:
-  name_template: "checksums.txt"
+  # Terraform Registry expects: terraform-provider-kkp_0.0.2_SHA256SUMS
+  name_template: "{{ .ProjectName }}_{{ trimprefix .Version \"v\" }}_SHA256SUMS"
+  algorithm: sha256
+
+signs:
+  # Sign the SHA256SUMS file with GPG; requires GPG key available on runner
+  - artifacts: checksum
+    cmd: gpg
+    signature: "${artifact}.sig"
+    args:
+      - "--batch"
+      - "--yes"
+      - "--pinentry-mode"
+      - "loopback"
+      - "--passphrase"
+      - "{{ .Env.GPG_PASSPHRASE }}"
+      - "-u"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
 
 release:
   draft: false

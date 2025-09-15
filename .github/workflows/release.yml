@@ -29,6 +29,23 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@latest
 
+      - name: Import GPG key (optional)
+        if: github.ref_type == 'tag' && secrets.GPG_PRIVATE_KEY != ''
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          # Prefer base64-encoded secret; fallback to plain armored import
+          if echo "$GPG_PRIVATE_KEY" | base64 -d >/tmp/gpg.key 2>/dev/null; then
+            gpg --batch --import /tmp/gpg.key
+            rm -f /tmp/gpg.key
+          else
+            printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          fi
+          # Export fingerprint for signing
+          KEY_ID=$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^sec:/{print $5; exit}')
+          echo "GPG_FINGERPRINT=$KEY_ID" >> "$GITHUB_ENV"
+
       - name: Verify docs up-to-date (make docs)
         if: github.ref_type == 'tag'
         run: |
@@ -48,6 +65,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Run GoReleaser (snapshot on manual/branch run)
         if: github.ref_type != 'tag'
