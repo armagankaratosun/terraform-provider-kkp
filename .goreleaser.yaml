@@ -31,7 +31,7 @@ archives:
     ids: [provider]
     name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format: tar.gz
-    overrides:
+    format_overrides:
       - goos: windows
         format: zip
     files:
@@ -41,7 +41,7 @@ archives:
     ids: [provider-tofu]
     name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}_tofu"
     format: tar.gz
-    overrides:
+    format_overrides:
       - goos: windows
         format: zip
     files:
