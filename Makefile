@@ -1,10 +1,18 @@
-.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush docs docs-check snapshot examples-validate examples-bump-version examples-version-check
+.PHONY: help build test lint lint-fix clean install deps dev-deps fmt fmt-check tidy check pre-commit dev release tag tag-push tag-delete tag-repush docs docs-check docs-verify snapshot examples-validate examples-bump-version examples-version-check bump-docs-version print-version
 
 # Variables
 BINARY_NAME=terraform-provider-kkp
 BUILD_DIR=./bin
 GOOS?=$(shell go env GOOS)
 GOARCH?=$(shell go env GOARCH)
+# Version resolution order:
+# 1) exact git tag on HEAD (vX.Y.Z)
+# 2) VERSION file contents
+# 3) fallback: dev
+VERSION?=$(shell git describe --tags --exact-match 2>/dev/null || cat VERSION 2>/dev/null || echo dev)
+VER_PLAIN:=$(patsubst v%,%,$(VERSION))
+# Auto-commit behavior for `make docs` (0=off, 1=commit changes)
+AUTO_COMMIT?=1
 
 help: ## Display this help message
 	@echo "Available targets:"
@@ -13,7 +21,7 @@ help: ## Display this help message
 build: ## Build the Terraform provider binary
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	@V=$${VERSION:-dev}; \
+	@V="$(VERSION)"; \
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags="-X main.version=$$V" \
 		-o $(BUILD_DIR)/$(BINARY_NAME)_$$V .; \
@@ -51,7 +59,7 @@ install: build ## Install the provider binary to local Terraform plugin director
 	  echo "ERROR: VERSION is required for 'make install' (e.g., VERSION=v0.1.0)" >&2; exit 1; \
 	fi
 	@echo "Installing provider locally..."
-	@VER_PLAIN=$${VERSION#v}; \
+	@VER_PLAIN="$(VER_PLAIN)"; \
 	mkdir -p $$HOME/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$$VER_PLAIN/$(GOOS)_$(GOARCH)/; \
 	cp $(BUILD_DIR)/$(BINARY_NAME)_$(VERSION) $$HOME/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$$VER_PLAIN/$(GOOS)_$(GOARCH)/$(BINARY_NAME)_$(VERSION); \
 	echo "Provider installed to $$HOME/.terraform.d/plugins/"
@@ -140,7 +148,13 @@ release: clean test lint build ## Release build (clean, test, lint, build)
 .PHONY: docs docs-full
 
 # Documentation
-docs: ## Generate provider docs with tfplugindocs
+docs: ## Generate docs, sync version snippets, and verify clean
+	@echo "Syncing docs version (resolved: $(VERSION), plain: $(VER_PLAIN))..."
+	@if [ "$(VER_PLAIN)" != "dev" ]; then \
+	  $(MAKE) bump-docs-version; \
+	else \
+	  echo "Skipping version bump (VERSION=dev)"; \
+	fi
 	@echo "Generating provider docs with tfplugindocs..."
 	@command -v tfplugindocs >/dev/null 2>&1 || { \
 	  echo "tfplugindocs not found." >&2; \
@@ -148,6 +162,25 @@ docs: ## Generate provider docs with tfplugindocs
 	  exit 1; \
 	}
 	@tfplugindocs generate
+	@echo "Verifying docs/snippets/examples are clean..."
+	@if git diff --quiet -- docs templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md examples; then \
+	  echo "Docs and snippets are up-to-date."; \
+	else \
+	  if [ "$(AUTO_COMMIT)" = "1" ]; then \
+	    echo "Auto-committing docs/snippets updates..."; \
+	    git add docs templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md examples; \
+	    if [ "$(VER_PLAIN)" != "dev" ]; then \
+	      git commit -m "docs: bump provider snippets to ~> $(VER_PLAIN); regenerate"; \
+	    else \
+	      git commit -m "docs: regenerate with tfplugindocs"; \
+	    fi; \
+	  else \
+	    echo "ERROR: Docs/snippets/examples are out of sync with VERSION=$(VERSION)." >&2; \
+	    echo "Hint: run 'make docs' to auto-commit the provider version bump and regenerated docs, or 'AUTO_COMMIT=0 make docs' to review diffs; then retry." >&2; \
+	    git --no-pager diff -- docs templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md examples || true; \
+	    exit 1; \
+	  fi; \
+	fi
 
 docs-full: docs ## Generate docs (alias)
 
@@ -159,6 +192,11 @@ docs-check: ## Verify docs are up-to-date (fails if changes)
 	  exit 1; \
 	}
 
+# Ensure docs, templates, README, and examples match the resolved version
+docs-verify: ## Verify docs/snippets/examples match VERSION; fails on diff
+	@echo "Verifying docs/snippets/examples for VERSION=$(VERSION) ..."
+	@AUTO_COMMIT=0 $(MAKE) docs
+
 # Tagging helpers (require v-prefixed VERSION, e.g., VERSION=v0.1.0)
 tag: ## Create an annotated git tag $(VERSION) on HEAD
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION is required (e.g., VERSION=v0.1.0)" >&2; exit 1; fi
@@ -166,7 +204,7 @@ tag: ## Create an annotated git tag $(VERSION) on HEAD
 	@git tag -a $(VERSION) -m "Release $(VERSION)"
 	@echo "Created tag $(VERSION)"
 
-tag-push: ## Push tag $(VERSION) to origin
+tag-push: docs-verify ## Push tag $(VERSION) to origin
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION is required (e.g., VERSION=v0.1.0)" >&2; exit 1; fi
 	@git push origin $(VERSION)
 
@@ -187,3 +225,20 @@ snapshot: ## Build snapshot artifacts locally with GoReleaser (no publish)
 	@command -v goreleaser >/dev/null 2>&1 || { echo "Installing goreleaser..."; \
 		GO111MODULE=on go install github.com/goreleaser/goreleaser/v2@latest; }
 	@GOCACHE=$(PWD)/.cache/gobuild GOMODCACHE=$(PWD)/.cache/gomod goreleaser release --clean --snapshot --skip=publish
+
+# Version helpers
+print-version: ## Print resolved VERSION and VER_PLAIN
+	@echo VERSION=$(VERSION)
+	@echo VER_PLAIN=$(VER_PLAIN)
+
+bump-docs-version: ## Update version in templates and examples using VER_PLAIN
+	@if [ -z "$(VER_PLAIN)" ] || [ "$(VER_PLAIN)" = "dev" ]; then \
+	  echo "ERROR: Set VERSION (vX.Y.Z) or create a VERSION file before bumping." >&2; exit 1; \
+	fi
+	@echo "Updating templates and README to use ~> $(VER_PLAIN) ..."
+	@sed -i.bak -E 's/^([[:space:]]*version[[:space:]]*=[[:space:]]*")(~>[[:space:]]*)?[^\"]+(\")/\1~> $(VER_PLAIN)\3/' \
+	  templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md; \
+	  rm -f templates/index.md.tmpl.bak templates/guides/getting-started.md.tmpl.bak README.md.bak; \
+	  true
+	@echo "Bumping example provider constraints to ~> $(VER_PLAIN) ..."
+	@$(MAKE) examples-bump-version EXAMPLES_VERSION=$(VER_PLAIN)

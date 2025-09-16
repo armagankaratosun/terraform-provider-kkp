@@ -24,6 +24,15 @@ This provider uses HashiCorp's terraform-plugin-docs (tfplugindocs) to generate 
 - Generate docs: `make docs`
 - Verify docs are up-to-date: `make docs-check`
 
+Docs auto-commit (default on)
+- `make docs` will auto-commit doc/snippet changes by default with a Conventional Commit message:
+  - `docs: bump provider snippets to ~> <version>; regenerate` (when VERSION is resolved)
+  - `docs: regenerate with tfplugindocs` (when VERSION resolves to `dev`)
+- To disable auto-commit for a run:
+  ```bash
+  AUTO_COMMIT=0 make docs
+  ```
+
 Please do not edit files under `docs/` manually; update schemas/descriptions in code instead and regenerate.
 
 ### Conventional Commits (recommended)
@@ -72,6 +81,7 @@ Releases are built from tags using GitHub Actions and GoReleaser. Release notes 
 2. Create and push a semver tag (v‑prefixed) using Makefile helpers:
    ```bash
    make tag VERSION=vX.Y.Z
+   # This will verify docs/snippets/examples first and fail on differences
    make tag-push VERSION=vX.Y.Z
    ```
    If you need to fix a tag, use:
@@ -88,6 +98,10 @@ Notes:
 - Publishing to the Terraform/OpenTofu registries is not wired up yet; current automation publishes GitHub releases only.
 - The provider binary embeds the version via `-ldflags -X main.version=<tag>`.
  - The provider binary embeds the registry address at build time; we build artifacts for both Terraform and OpenTofu registries.
+
+If `make tag-push` fails on docs:
+- Run `make docs` (auto-commit on) or `AUTO_COMMIT=0 make docs` to inspect diffs.
+- Commit the changes if needed, then re-run `make tag-push VERSION=vX.Y.Z`.
 
 
 ## Branch Protection
