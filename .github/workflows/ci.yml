@@ -77,14 +77,15 @@ jobs:
       - name: Validate examples (terraform validate)
         run: make examples-validate
 
-      - name: Validate examples (terraform validate)
+      - name: Validate examples (terraform validate, explicit scan)
         run: |
           set -euo pipefail
           if [ -d examples ]; then
             find examples -type f -name 'main.tf' | while read -r f; do
               d=$(dirname "$f")
               echo "==> Validating $d"
-              (cd "$d" && terraform init -backend=false -input=false -upgrade && terraform validate -no-color)
+              # Do not use -upgrade because we validate against a local dev override
+              (cd "$d" && terraform init -backend=false -input=false && terraform validate -no-color)
             done
           else
             echo "No examples/ directory; skipping terraform validate"

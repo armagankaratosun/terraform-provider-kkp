@@ -5,6 +5,8 @@ BINARY_NAME=terraform-provider-kkp
 BUILD_DIR=./bin
 GOOS?=$(shell go env GOOS)
 GOARCH?=$(shell go env GOARCH)
+# Reduce recursive make noise
+MAKEFLAGS += --no-print-directory
 # Version resolution order:
 # 1) exact git tag on HEAD (vX.Y.Z)
 # 2) VERSION file contents
@@ -120,7 +122,11 @@ examples-validate: ## Validate all examples with terraform init/validate (no bac
 	find examples -type f -name 'main.tf' | while read -r f; do \
 	  d=$$(dirname "$$f"); \
 	  echo "==> $$d"; \
-	  (cd "$$d" && terraform init -backend=false -input=false -upgrade >/dev/null && terraform validate -no-color); \
+	  if [ -n "$$TF_CLI_CONFIG_FILE" ] && [ -f "$$TF_CLI_CONFIG_FILE" ]; then \
+	    (cd "$$d" && terraform init -backend=false -input=false >/dev/null && terraform validate -no-color); \
+	  else \
+	    (cd "$$d" && terraform init -backend=false -input=false -upgrade >/dev/null && terraform validate -no-color); \
+	  fi; \
 	done; \
 	echo "All examples validated."
 
@@ -175,9 +181,15 @@ docs: ## Generate docs, sync version snippets, and verify clean
 	      git commit -m "docs: regenerate with tfplugindocs"; \
 	    fi; \
 	  else \
+	    echo "================ DOCS VERIFY FAILED ================" >&2; \
+	    echo "Changed files:" >&2; \
+	    git --no-pager diff --name-only -- docs templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md examples || true; \
+	    echo "--- Full diff ---" >&2; \
+	    git --no-pager diff -- docs templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md examples || true; \
+	    echo "" >&2; \
 	    echo "ERROR: Docs/snippets/examples are out of sync with VERSION=$(VERSION)." >&2; \
 	    echo "Hint: run 'make docs' to auto-commit the provider version bump and regenerated docs, or 'AUTO_COMMIT=0 make docs' to review diffs; then retry." >&2; \
-	    git --no-pager diff -- docs templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md examples || true; \
+	    echo "====================================================" >&2; \
 	    exit 1; \
 	  fi; \
 	fi
@@ -208,7 +220,20 @@ examples-validate-local: ## Build provider and validate examples using dev_overr
 	    '  }' \
 	    '  direct {}' \
 	    '}' > "$$tmp"; \
-	  TF_CLI_CONFIG_FILE="$$tmp" $(MAKE) examples-validate; \
+	  workdir=$$(mktemp -d); \
+	  echo "Copying examples to $$workdir for validation..."; \
+	  cp -R examples "$$workdir/"; \
+	  echo "Relaxing provider version constraints in temp copy..."; \
+	  find "$$workdir/examples" -type f -name 'main.tf' -print0 | xargs -0 sed -i -E 's/(version\s*=\s*")(~>\s*)?[^\"]+(\")/\1>= 0.0.0\3/g'; \
+  export TF_CLI_CONFIG_FILE="$$tmp"; \
+  echo "Validating Terraform examples..."; \
+  find "$$workdir/examples" -type f -name 'main.tf' | while read -r f; do \
+    d=$$(dirname "$$f"); \
+    echo "==> $$d"; \
+    (cd "$$d" && terraform init -backend=false -input=false >/dev/null && terraform validate -no-color); \
+  done; \
+  echo "All examples validated."; \
+	  rm -rf "$$workdir"; \
 	  rm -f "$$tmp"
 
 # Ensure docs, templates, README, and examples match the resolved version
@@ -226,6 +251,9 @@ tag: ## Create an annotated git tag $(VERSION) on HEAD
 
 tag-push: docs-verify ## Push tag $(VERSION) to origin
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION is required (e.g., VERSION=v0.1.0)" >&2; exit 1; fi
+	@if ! git rev-parse -q --verify "refs/tags/$(VERSION)" >/dev/null; then \
+	  echo "ERROR: Tag $(VERSION) not found. Create it first: make tag VERSION=$(VERSION)" >&2; exit 1; \
+	fi
 	@git push origin $(VERSION)
 
 tag-delete: ## Delete local and remote tag $(VERSION)
