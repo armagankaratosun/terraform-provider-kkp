@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 
-	pcli "github.com/kubermatic/go-kubermatic/client/project"
+	kapi "github.com/kubermatic/go-kubermatic/client/project"
 	"github.com/kubermatic/go-kubermatic/models"
 )
 
@@ -148,9 +148,9 @@ func (rb *ResourceBase) ConfigureResource(req resource.ConfigureRequest, resp *r
 
 // FetchClusters retrieves clusters from KKP API for a given project
 func (dsb *DataSourceBase) FetchClusters() ([]*models.Cluster, error) {
-	pclient := pcli.New(dsb.Client.Transport, nil)
-	params := pcli.NewListClustersV2Params().WithProjectID(dsb.DefaultProjectID)
-	resp, err := pclient.ListClustersV2(params, nil)
+	pcli := kapi.New(dsb.Client.Transport, nil)
+	params := kapi.NewListClustersV2Params().WithProjectID(dsb.DefaultProjectID)
+	resp, err := pcli.ListClustersV2(params, nil)
 	if err != nil {
 		return nil, err
 	}

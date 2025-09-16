@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
-	pcli "github.com/kubermatic/go-kubermatic/client/project"
+	kapi "github.com/kubermatic/go-kubermatic/client/project"
 	"github.com/kubermatic/go-kubermatic/models"
 
 	"github.com/armagankaratosun/terraform-provider-kkp/internal/kkp"
@@ -137,12 +137,12 @@ func (d *dataSourceMachineDeployments) validateClusterID(config *machineDeployme
 
 // fetchMachineDeployments retrieves machine deployments from the API for the given cluster.
 func (d *dataSourceMachineDeployments) fetchMachineDeployments(clusterID string) ([]*models.NodeDeployment, error) {
-	pclient := pcli.New(d.Client.Transport, nil)
-	params := pcli.NewListMachineDeploymentsParams().
+	pcli := kapi.New(d.Client.Transport, nil)
+	params := kapi.NewListMachineDeploymentsParams().
 		WithProjectID(d.DefaultProjectID).
 		WithClusterID(clusterID)
 
-	machineDeploymentsResp, err := pclient.ListMachineDeployments(params, nil)
+	machineDeploymentsResp, err := pcli.ListMachineDeployments(params, nil)
 	if err != nil {
 		return nil, err
 	}
