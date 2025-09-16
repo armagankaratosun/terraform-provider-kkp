@@ -55,15 +55,16 @@ jobs:
           # Build the provider with the resolved VERSION (from tag or VERSION file)
           make build
           # Configure Terraform to use the locally built provider for validation
-          cat > "$RUNNER_TEMP/tfrc" <<'RC'
-          provider_installation {
-            dev_overrides {
-              "registry.terraform.io/armagankaratosun/kkp" = "$GITHUB_WORKSPACE/bin"
-            }
-            direct {}
-          }
-RC
-          echo "TF_CLI_CONFIG_FILE=$RUNNER_TEMP/tfrc" >> "$GITHUB_ENV"
+          tfdir="$RUNNER_TEMP"
+          mkdir -p "$tfdir"
+          printf '%s\n' \
+            'provider_installation {' \
+            '  dev_overrides {' \
+            '    "registry.terraform.io/armagankaratosun/kkp" = "'"$GITHUB_WORKSPACE"'/bin"' \
+            '  }' \
+            '  direct {}' \
+            '}' > "$tfdir/tfrc"
+          echo "TF_CLI_CONFIG_FILE=$tfdir/tfrc" >> "$GITHUB_ENV"
 
       - name: Check Terraform formatting in examples/
         run: |
