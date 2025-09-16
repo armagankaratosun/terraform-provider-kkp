@@ -52,8 +52,8 @@ provider "kkp" {
 
 ## Resources
 
-- Browse per‑resource docs under [resources/](resources/)
+- Browse per‑resource docs under [docs/resources/](docs/resources/)
 
 ## Data Sources
 
-- Browse per‑data‑source docs under [data-sources/](data-sources/)
+- Browse per‑data‑source docs under [docs/data-sources/](docs/data-sources/)
