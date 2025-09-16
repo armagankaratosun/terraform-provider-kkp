@@ -15,7 +15,7 @@ provider "kkp" {
 }
 
 # Optional: create a project-scoped SSH key
-resource "kkp_project_sshkey" "example" {
+resource "kkp_ssh_key_v2" "example" {
   count      = var.enable_ssh_key ? 1 : 0
   name       = var.ssh_key_name
   public_key = var.ssh_public_key
@@ -38,9 +38,6 @@ resource "kkp_cluster_v2" "cluster" {
     security_groups  = var.os_security_groups
   }
 
-  labels = {
-    environment = "example"
-  }
 }
 
 resource "kkp_machine_deployment_v2" "workers" {

@@ -12,7 +12,6 @@ Notes:
 - Provider type is `kkp` and resources are prefixed with `kkp_...`.
 - OpenStack examples assume you will provide either KKP preset credentials or OpenStack application credentials. These examples use application credentials.
 - Some resources (e.g., addons/applications) may require that corresponding catalogs are available in your KKP installation. They are disabled by default using `count` flags you can toggle.
-- SSH key resource type in this codebase is `kkp_project_sshkey`.
 
 Examples:
 - [OpenStack Minimal](examples/cluster/openstack/minimal/README.md) – Minimal cluster creation on OpenStack.
