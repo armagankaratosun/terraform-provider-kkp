@@ -49,22 +49,8 @@ jobs:
       - name: Install Terraform CLI
         uses: hashicorp/setup-terraform@v3
 
-      - name: Build provider and set Terraform dev overrides
-        run: |
-          set -euo pipefail
-          # Build the provider with the resolved VERSION (from tag or VERSION file)
-          make build
-          # Configure Terraform to use the locally built provider for validation
-          tfdir="$RUNNER_TEMP"
-          mkdir -p "$tfdir"
-          printf '%s\n' \
-            'provider_installation {' \
-            '  dev_overrides {' \
-            '    "registry.terraform.io/armagankaratosun/kkp" = "'"$GITHUB_WORKSPACE"'/bin"' \
-            '  }' \
-            '  direct {}' \
-            '}' > "$tfdir/tfrc"
-          echo "TF_CLI_CONFIG_FILE=$tfdir/tfrc" >> "$GITHUB_ENV"
+      - name: Validate examples (local)
+        run: make examples-validate
 
       - name: Check Terraform formatting in examples/
         run: |
@@ -74,22 +60,7 @@ jobs:
             echo "No examples/ directory; skipping terraform fmt check"
           fi
 
-      - name: Validate examples (terraform validate)
-        run: make examples-validate
-
-      - name: Validate examples (terraform validate, explicit scan)
-        run: |
-          set -euo pipefail
-          if [ -d examples ]; then
-            find examples -type f -name 'main.tf' | while read -r f; do
-              d=$(dirname "$f")
-              echo "==> Validating $d"
-              # Do not use -upgrade because we validate against a local dev override
-              (cd "$d" && terraform init -backend=false -input=false && terraform validate -no-color)
-            done
-          else
-            echo "No examples/ directory; skipping terraform validate"
-          fi
+      
 
       - name: Check formatting (gofmt -s)
         run: |

@@ -115,20 +115,33 @@ tidy: ## Tidy up go.mod
 	@go mod tidy
 
 # Examples
-examples-validate: ## Validate all examples with terraform init/validate (no backend)
-	@echo "Validating Terraform examples..."
+# Examples: single local validator (builds provider, uses dev_overrides, validates temp copy)
+examples-validate: ## Validate examples against locally built provider (no registry)
+	@echo "Validating examples against locally built provider..."
 	@command -v terraform >/dev/null 2>&1 || { echo "Terraform CLI is required for example validation" >&2; exit 1; }
-	@set -e; \
-	find examples -type f -name 'main.tf' | while read -r f; do \
-	  d=$$(dirname "$$f"); \
-	  echo "==> $$d"; \
-	  if [ -n "$$TF_CLI_CONFIG_FILE" ] && [ -f "$$TF_CLI_CONFIG_FILE" ]; then \
+	@$(MAKE) build
+	@tmp_rc=$$(mktemp); \
+	  printf '%s\n' \
+	    'provider_installation {' \
+	    '  dev_overrides {' \
+	    '    "registry.terraform.io/armagankaratosun/kkp" = "'"$(PWD)"'/bin"' \
+	    '  }' \
+	    '  direct {}' \
+	    '}' > "$$tmp_rc"; \
+	  workdir=$$(mktemp -d); \
+	  echo "Copying examples to $$workdir for validation..."; \
+	  cp -R examples "$$workdir/"; \
+	  echo "Relaxing provider version constraints in temp copy..."; \
+	  find "$$workdir/examples" -type f -name 'main.tf' -print0 | xargs -0 sed -i -E 's/(version\s*=\s*")(~>\s*)?[^\"]+(\")/\1>= 0.0.0\3/g'; \
+	  export TF_CLI_CONFIG_FILE="$$tmp_rc"; \
+	  echo "Validating Terraform examples..."; \
+	  find "$$workdir/examples" -type f -name 'main.tf' | while read -r f; do \
+	    d=$$(dirname "$$f"); \
+	    echo "==> $$d"; \
 	    (cd "$$d" && terraform init -backend=false -input=false >/dev/null && terraform validate -no-color); \
-	  else \
-	    (cd "$$d" && terraform init -backend=false -input=false -upgrade >/dev/null && terraform validate -no-color); \
-	  fi; \
-	done; \
-	echo "All examples validated."
+	  done; \
+	  echo "All examples validated."; \
+	  rm -rf "$$workdir" "$$tmp_rc"
 
 # Usage: make examples-bump-version EXAMPLES_VERSION=0.1.0
 examples-bump-version: ## Bump provider version constraint in examples (EXAMPLES_VERSION=0.1.0)
@@ -204,43 +217,11 @@ docs-check: ## Verify docs are up-to-date (fails if changes)
 	  exit 1; \
 	}
 
-# Validate examples using locally built provider (Terraform dev overrides)
-examples-validate-local: ## Build provider and validate examples using dev_overrides (skips if Terraform missing)
-	@echo "Validating examples against locally built provider..."
-	@if ! command -v terraform >/dev/null 2>&1; then \
-	  echo "Terraform CLI not found; skipping examples validation."; \
-	  exit 0; \
-	fi
-	@$(MAKE) build
-	@tmp=$$(mktemp); \
-	  printf '%s\n' \
-	    'provider_installation {' \
-	    '  dev_overrides {' \
-	    '    "registry.terraform.io/armagankaratosun/kkp" = "'"$(PWD)"'/bin"' \
-	    '  }' \
-	    '  direct {}' \
-	    '}' > "$$tmp"; \
-	  workdir=$$(mktemp -d); \
-	  echo "Copying examples to $$workdir for validation..."; \
-	  cp -R examples "$$workdir/"; \
-	  echo "Relaxing provider version constraints in temp copy..."; \
-	  find "$$workdir/examples" -type f -name 'main.tf' -print0 | xargs -0 sed -i -E 's/(version\s*=\s*")(~>\s*)?[^\"]+(\")/\1>= 0.0.0\3/g'; \
-  export TF_CLI_CONFIG_FILE="$$tmp"; \
-  echo "Validating Terraform examples..."; \
-  find "$$workdir/examples" -type f -name 'main.tf' | while read -r f; do \
-    d=$$(dirname "$$f"); \
-    echo "==> $$d"; \
-    (cd "$$d" && terraform init -backend=false -input=false >/dev/null && terraform validate -no-color); \
-  done; \
-  echo "All examples validated."; \
-	  rm -rf "$$workdir"; \
-	  rm -f "$$tmp"
-
 # Ensure docs, templates, README, and examples match the resolved version
 docs-verify: ## Verify docs/snippets/examples match VERSION and validate examples; fails on diff
 	@echo "Verifying docs/snippets/examples for VERSION=$(VERSION) ..."
 	@AUTO_COMMIT=0 $(MAKE) docs
-	@$(MAKE) examples-validate-local
+	@$(MAKE) examples-validate
 
 # Tagging helpers (require v-prefixed VERSION, e.g., VERSION=v0.1.0)
 tag: ## Create an annotated git tag $(VERSION) on HEAD
