@@ -22,3 +22,9 @@ variable "cluster_id_for_mds" {
   type        = string
   default     = ""
 }
+
+variable "cluster_id_for_kubeconfig" {
+  description = "Optional: cluster ID to fetch kubeconfig for"
+  type        = string
+  default     = ""
+}
