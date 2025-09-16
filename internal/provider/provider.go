@@ -14,6 +14,7 @@ import (
 
 	data_source_addon_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/addon_v2"
 	data_source_application_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/application_v2"
+	data_source_cluster_kubeconfig_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/cluster_kubeconfig_v2"
 	data_source_cluster_template_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/cluster_template_v2"
 	data_source_cluster_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/cluster_v2"
 	data_source_machine_deployment_v2 "github.com/armagankaratosun/terraform-provider-kkp/internal/data/machine_deployment_v2"
@@ -164,6 +165,7 @@ func (p *KKPProvider) DataSources(_ context.Context) []func() datasource.DataSou
 		data_source_addon_v2.NewDataSource,
 		data_source_application_v2.NewDataSource,
 		data_source_cluster_v2.NewDataSource,
+		data_source_cluster_kubeconfig_v2.NewDataSource,
 		data_source_machine_deployment_v2.NewDataSource,
 		data_source_ssh_key_v2.NewDataSource,
 		data_source_cluster_template_v2.NewDataSource,

@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
-	pcli "github.com/kubermatic/go-kubermatic/client/project"
+	kapi "github.com/kubermatic/go-kubermatic/client/project"
 	"github.com/kubermatic/go-kubermatic/models"
 )
 
@@ -114,9 +114,9 @@ func (d *dataSourceSSHKeys) Read(ctx context.Context, req datasource.ReadRequest
 }
 
 func (d *dataSourceSSHKeys) fetchSSHKeys() ([]*models.SSHKey, error) {
-	pclient := pcli.New(d.Client.Transport, nil)
-	params := pcli.NewListSSHKeysParams().WithProjectID(d.DefaultProjectID)
-	resp, err := pclient.ListSSHKeys(params, nil)
+	pcli := kapi.New(d.Client.Transport, nil)
+	params := kapi.NewListSSHKeysParams().WithProjectID(d.DefaultProjectID)
+	resp, err := pcli.ListSSHKeys(params, nil)
 	if err != nil {
 		return nil, err
 	}
