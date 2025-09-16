@@ -192,10 +192,30 @@ docs-check: ## Verify docs are up-to-date (fails if changes)
 	  exit 1; \
 	}
 
+# Validate examples using locally built provider (Terraform dev overrides)
+examples-validate-local: ## Build provider and validate examples using dev_overrides (skips if Terraform missing)
+	@echo "Validating examples against locally built provider..."
+	@if ! command -v terraform >/dev/null 2>&1; then \
+	  echo "Terraform CLI not found; skipping examples validation."; \
+	  exit 0; \
+	fi
+	@$(MAKE) build
+	@tmp=$$(mktemp); \
+	  printf '%s\n' \
+	    'provider_installation {' \
+	    '  dev_overrides {' \
+	    '    "registry.terraform.io/armagankaratosun/kkp" = "'"$(PWD)"'/bin"' \
+	    '  }' \
+	    '  direct {}' \
+	    '}' > "$$tmp"; \
+	  TF_CLI_CONFIG_FILE="$$tmp" $(MAKE) examples-validate; \
+	  rm -f "$$tmp"
+
 # Ensure docs, templates, README, and examples match the resolved version
-docs-verify: ## Verify docs/snippets/examples match VERSION; fails on diff
+docs-verify: ## Verify docs/snippets/examples match VERSION and validate examples; fails on diff
 	@echo "Verifying docs/snippets/examples for VERSION=$(VERSION) ..."
 	@AUTO_COMMIT=0 $(MAKE) docs
+	@$(MAKE) examples-validate-local
 
 # Tagging helpers (require v-prefixed VERSION, e.g., VERSION=v0.1.0)
 tag: ## Create an annotated git tag $(VERSION) on HEAD
