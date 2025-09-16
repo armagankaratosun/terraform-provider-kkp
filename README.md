@@ -26,7 +26,7 @@ terraform {
   required_providers {
     kkp = {
       source  = "armagankaratosun/kkp"
-      version = "~> 0.1.1" # pin to a minor series
+      version = "~> 0.1.2" # pin to a minor series
     }
   }
 }
