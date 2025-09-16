@@ -42,6 +42,7 @@ resource "kkp_cluster_v2" "cluster" {
 
 resource "kkp_machine_deployment_v2" "workers" {
   cluster_id = kkp_cluster_v2.cluster.id
+  depends_on = [kkp_cluster_v2.cluster]
   name       = var.md_name
   replicas   = var.md_replicas
   cloud      = "openstack"
