@@ -575,6 +575,17 @@ func (r *resourceMachineDeployment) createMachineDeployment(ctx context.Context,
 	}
 
 	pcli := kapi.New(r.Client.Transport, nil)
+
+	clusterChecker := &kkp.ClusterHealthChecker{
+		Client:    r.Client,
+		ProjectID: r.DefaultProjectID,
+		ClusterID: cp.ClusterID,
+	}
+	if readyErr := clusterChecker.WaitForClusterReady(ctx); readyErr != nil {
+		resp.Diagnostics.AddError("Cluster is not ready for machine deployment", readyErr.Error())
+		return "", readyErr
+	}
+
 	params := kapi.NewCreateMachineDeploymentParams().
 		WithProjectID(r.DefaultProjectID).
 		WithClusterID(cp.ClusterID).

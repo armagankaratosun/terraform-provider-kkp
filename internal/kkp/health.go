@@ -18,22 +18,29 @@ func statusUp(s models.HealthStatus) bool {
 	return v == "up" || strings.HasSuffix(v, "up") || v == "1" || v == "true"
 }
 
-// HealthReady performs lenient core readiness check: apiserver+controller+scheduler+etcd must be up.
+// HealthReady performs lenient core readiness check for control-plane and worker-critical components.
 func HealthReady(h *models.ClusterHealth) bool {
 	if h == nil {
 		return false
 	}
-	core := []bool{
-		statusUp(h.Apiserver),
-		statusUp(h.Controller),
-		statusUp(h.Scheduler),
-		statusUp(h.Etcd),
+	required := []struct {
+		name   string
+		status models.HealthStatus
+	}{
+		{"apiserver", h.Apiserver},
+		{"controller", h.Controller},
+		{"scheduler", h.Scheduler},
+		{"etcd", h.Etcd},
+		{"machineController", h.MachineController},
+		{"operatingSystemManager", h.OperatingSystemManager},
 	}
-	for _, ok := range core {
-		if !ok {
+
+	for _, component := range required {
+		if !statusUp(component.status) {
 			return false
 		}
 	}
+
 	return true
 }
 
