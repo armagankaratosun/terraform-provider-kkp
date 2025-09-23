@@ -30,6 +30,7 @@ Create a KKP cluster in the provider-level project (modular cloud support).
 - `cni_version` (String) CNI plugin version (default: v1.14).
 - `openstack` (Block, Optional) (see [below for nested schema](#nestedblock--openstack))
 - `preset` (String) KKP preset/credential name. Leave empty when using OpenStack application credentials.
+- `ssh_key_ids` (List of String) Existing SSH key IDs to assign to the cluster.
 - `template_id` (String) Cluster Template ID to instantiate (used when use_template = true).
 - `template_name` (String) Cluster Template name to instantiate (alternative to template_id). If both are set, template_id is used.
 - `template_replicas` (Number) Number of template instances to create (default 1).
