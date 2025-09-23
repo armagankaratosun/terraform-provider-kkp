@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	rschema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -101,6 +103,15 @@ func (r *resourceCluster) Schema(_ context.Context, _ resource.SchemaRequest, re
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"ssh_key_ids": rschema.ListAttribute{
+				Optional:    true,
+				Computed:    true,
+				ElementType: tftypes.StringType,
+				Description: "Existing SSH key IDs to assign to the cluster.",
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
+			},
 
 			"cni_type": rschema.StringAttribute{
 				Optional:    true,
@@ -177,6 +188,21 @@ func (r *resourceCluster) Create(ctx context.Context, req resource.CreateRequest
 	plan, ok := kkp.ExtractPlan[clusterState](ctx, req, resp)
 	if !ok {
 		return
+	}
+
+	manageSSHKeys := false
+	desiredSSHKeyIDs := make([]string, 0)
+	if plan.SSHKeyIDs.IsNull() || plan.SSHKeyIDs.IsUnknown() {
+		// leave manageSSHKeys false to skip key management
+	} else {
+		var rawIDs []string
+		diags := plan.SSHKeyIDs.ElementsAs(ctx, &rawIDs, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		manageSSHKeys = true
+		desiredSSHKeyIDs = normalizeStringIDs(rawIDs)
 	}
 
 	// --- Optional: Template-based creation path ---
@@ -377,10 +403,30 @@ func (r *resourceCluster) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	var finalSSHKeyIDs []string
+	if manageSSHKeys {
+		var err error
+		finalSSHKeyIDs, err = r.syncClusterSSHKeys(ctx, pcli, clusterID, desiredSSHKeyIDs)
+		if err != nil {
+			resp.Diagnostics.AddError("Assign SSH keys to cluster failed", err.Error())
+			return
+		}
+	}
+
 	// Ready: persist state
 	state := plan
 	state.ID = tftypes.StringValue(clusterID)
 	state.Name = tftypes.StringValue(out.Payload.Name)
+	if manageSSHKeys {
+		listValue, diags := tftypes.ListValueFrom(ctx, tftypes.StringType, finalSSHKeyIDs)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.SSHKeyIDs = listValue
+	} else {
+		state.SSHKeyIDs = tftypes.ListNull(tftypes.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -415,6 +461,21 @@ func (r *resourceCluster) Read(ctx context.Context, req resource.ReadRequest, re
 
 	state.ID = tftypes.StringValue(got.Payload.ID)
 	state.Name = tftypes.StringValue(got.Payload.Name)
+	if state.SSHKeyIDs.IsNull() || state.SSHKeyIDs.IsUnknown() {
+		state.SSHKeyIDs = tftypes.ListNull(tftypes.StringType)
+	} else {
+		sshKeys, err := r.fetchClusterSSHKeys(ctx, pcli, id)
+		if err != nil {
+			resp.Diagnostics.AddError("List cluster SSH keys failed", err.Error())
+			return
+		}
+		listValue, diags := tftypes.ListValueFrom(ctx, tftypes.StringType, sshKeys)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		state.SSHKeyIDs = listValue
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -440,6 +501,19 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	manageSSHKeys := false
+	desiredSSHKeyIDs := make([]string, 0)
+	if !plan.SSHKeyIDs.IsNull() && !plan.SSHKeyIDs.IsUnknown() {
+		var rawIDs []string
+		diags := plan.SSHKeyIDs.ElementsAs(ctx, &rawIDs, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		manageSSHKeys = true
+		desiredSSHKeyIDs = normalizeStringIDs(rawIDs)
+	}
+
 	// Decide what changed
 	wantVersion := strings.TrimSpace(plan.K8sVersion.ValueString())
 	curVersion := strings.TrimSpace(state.K8sVersion.ValueString())
@@ -453,61 +527,79 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 		(wantCNIVer != "" && wantCNIVer != curCNIVer)
 
 	// Nothing to change -> just keep state
-	if !needVersion && !needCNI {
+	if !needVersion && !needCNI && !manageSSHKeys {
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 		return
 	}
 
 	// ---- build minimal patch (matches KKP spec shape) ----
-	spec := map[string]any{}
-	if needVersion {
-		spec["version"] = wantVersion
-	}
-	if needCNI {
-		// KKP expects spec.cniPlugin.{type,version}
-		spec["cniPlugin"] = map[string]any{
-			"type":    wantCNIType,
-			"version": wantCNIVer,
-		}
-	}
-	patchBody := map[string]any{"spec": spec}
-
 	pcli := kapi.New(r.Client.Transport, nil)
 
-	_, err := pcli.PatchClusterV2(
-		kapi.NewPatchClusterV2Params().
-			WithProjectID(r.DefaultProjectID).
-			WithClusterID(id).
-			WithPatch(patchBody),
-		nil,
-	)
-	if err != nil {
-		resp.Diagnostics.AddError("Patch cluster failed", err.Error())
-		return
-	}
-	tflog.Info(ctx, "patch sent", map[string]any{
-		"cluster_id": id,
-		"version":    wantVersion,
-		"cni_type":   wantCNIType,
-		"cni_ver":    wantCNIVer,
-	})
+	if needVersion || needCNI {
+		spec := map[string]any{}
+		if needVersion {
+			spec["version"] = wantVersion
+		}
+		if needCNI {
+			// KKP expects spec.cniPlugin.{type,version}
+			spec["cniPlugin"] = map[string]any{
+				"type":    wantCNIType,
+				"version": wantCNIVer,
+			}
+		}
+		patchBody := map[string]any{"spec": spec}
 
-	// ---- wait for update to complete ----
-	checker := &kkp.ClusterHealthChecker{
-		Client:    r.Client,
-		ProjectID: r.DefaultProjectID,
-		ClusterID: id,
+		_, err := pcli.PatchClusterV2(
+			kapi.NewPatchClusterV2Params().
+				WithProjectID(r.DefaultProjectID).
+				WithClusterID(id).
+				WithPatch(patchBody),
+			nil,
+		)
+		if err != nil {
+			resp.Diagnostics.AddError("Patch cluster failed", err.Error())
+			return
+		}
+		tflog.Info(ctx, "patch sent", map[string]any{
+			"cluster_id": id,
+			"version":    wantVersion,
+			"cni_type":   wantCNIType,
+			"cni_ver":    wantCNIVer,
+		})
+
+		// ---- wait for update to complete ----
+		checker := &kkp.ClusterHealthChecker{
+			Client:    r.Client,
+			ProjectID: r.DefaultProjectID,
+			ClusterID: id,
+		}
+
+		expectedSpec := kkp.ClusterUpdateSpec{
+			K8sVersion: wantVersion,
+			CNIType:    wantCNIType,
+			CNIVersion: wantCNIVer,
+		}
+
+		if err := checker.WaitForClusterUpdated(ctx, expectedSpec); err != nil {
+			resp.Diagnostics.AddError("Cluster update timed out", err.Error())
+			return
+		}
 	}
 
-	expectedSpec := kkp.ClusterUpdateSpec{
-		K8sVersion: wantVersion,
-		CNIType:    wantCNIType,
-		CNIVersion: wantCNIVer,
-	}
-
-	if err := checker.WaitForClusterUpdated(ctx, expectedSpec); err != nil {
-		resp.Diagnostics.AddError("Cluster update timed out", err.Error())
-		return
+	if manageSSHKeys {
+		finalSSH, err := r.syncClusterSSHKeys(ctx, pcli, id, desiredSSHKeyIDs)
+		if err != nil {
+			resp.Diagnostics.AddError("Sync cluster SSH keys failed", err.Error())
+			return
+		}
+		listValue, diags := tftypes.ListValueFrom(ctx, tftypes.StringType, finalSSH)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		plan.SSHKeyIDs = listValue
+	} else {
+		plan.SSHKeyIDs = tftypes.ListNull(tftypes.StringType)
 	}
 
 	// Success: write new state (preserve id)
@@ -557,6 +649,113 @@ func (r *resourceCluster) Delete(ctx context.Context, req resource.DeleteRequest
 
 	// Confirmed gone; remove from state.
 	resp.State.RemoveResource(ctx)
+}
+
+func (r *resourceCluster) fetchClusterSSHKeys(ctx context.Context, pcli kapi.ClientService, clusterID string) ([]string, error) {
+	list, err := pcli.ListSSHKeysAssignedToClusterV2(
+		kapi.NewListSSHKeysAssignedToClusterV2Params().
+			WithProjectID(r.DefaultProjectID).
+			WithClusterID(clusterID),
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0)
+	if list != nil && list.Payload != nil {
+		for _, key := range list.Payload {
+			if key == nil {
+				continue
+			}
+			ids = append(ids, key.ID)
+		}
+	}
+
+	return normalizeStringIDs(ids), nil
+}
+
+func (r *resourceCluster) syncClusterSSHKeys(ctx context.Context, pcli kapi.ClientService, clusterID string, desired []string) ([]string, error) {
+	desiredIDs := normalizeStringIDs(desired)
+	currentIDs, err := r.fetchClusterSSHKeys(ctx, pcli, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	desiredSet := make(map[string]struct{}, len(desiredIDs))
+	for _, id := range desiredIDs {
+		desiredSet[id] = struct{}{}
+	}
+	currentSet := make(map[string]struct{}, len(currentIDs))
+	for _, id := range currentIDs {
+		currentSet[id] = struct{}{}
+	}
+
+	assign := make([]string, 0)
+	for _, id := range desiredIDs {
+		if _, ok := currentSet[id]; !ok {
+			assign = append(assign, id)
+		}
+	}
+
+	detach := make([]string, 0)
+	for _, id := range currentIDs {
+		if _, ok := desiredSet[id]; !ok {
+			detach = append(detach, id)
+		}
+	}
+
+	for _, id := range assign {
+		params := kapi.NewAssignSSHKeyToClusterV2Params().
+			WithProjectID(r.DefaultProjectID).
+			WithClusterID(clusterID).
+			WithKeyID(id)
+		if _, err := pcli.AssignSSHKeyToClusterV2(params, nil); err != nil {
+			return nil, err
+		}
+		tflog.Info(ctx, "assigned SSH key to cluster", map[string]any{
+			"cluster_id": clusterID,
+			"ssh_key_id": id,
+		})
+	}
+
+	for _, id := range detach {
+		params := kapi.NewDetachSSHKeyFromClusterV2Params().
+			WithProjectID(r.DefaultProjectID).
+			WithClusterID(clusterID).
+			WithKeyID(id)
+		if _, err := pcli.DetachSSHKeyFromClusterV2(params, nil); err != nil {
+			return nil, err
+		}
+		tflog.Info(ctx, "detached SSH key from cluster", map[string]any{
+			"cluster_id": clusterID,
+			"ssh_key_id": id,
+		})
+	}
+
+	if len(assign) == 0 && len(detach) == 0 {
+		return currentIDs, nil
+	}
+
+	return r.fetchClusterSSHKeys(ctx, pcli, clusterID)
+}
+
+func normalizeStringIDs(ids []string) []string {
+	seen := make(map[string]struct{}, len(ids))
+	result := make([]string, 0, len(ids))
+	for _, id := range ids {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func (r *resourceCluster) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

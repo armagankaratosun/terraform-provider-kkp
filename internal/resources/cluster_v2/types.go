@@ -95,6 +95,7 @@ type clusterState struct {
 	Cloud      tftypes.String `tfsdk:"cloud"`
 	CNIType    tftypes.String `tfsdk:"cni_type"`
 	CNIVersion tftypes.String `tfsdk:"cni_version"`
+	SSHKeyIDs  tftypes.List   `tfsdk:"ssh_key_ids"`
 
 	// Template-based creation (optional)
 	UseTemplate      tftypes.Bool   `tfsdk:"use_template"`
