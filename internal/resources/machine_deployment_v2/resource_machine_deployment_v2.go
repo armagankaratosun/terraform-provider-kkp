@@ -28,6 +28,33 @@ var (
 	_ resource.ResourceWithConfigValidators = &resourceMachineDeployment{}
 )
 
+// clusterIDRequiresReplaceModifier marks the resource for replacement only when
+// both the planned and current cluster IDs are known and differ. This avoids the
+// Terraform plan seeing a temporary unknown (e.g. while a cluster update is in
+// progress) and forcing a destroy/create unnecessarily.
+type clusterIDRequiresReplaceModifier struct{}
+
+func (clusterIDRequiresReplaceModifier) Description(context.Context) string {
+	return "Requires replacement when the cluster ID changes to a different known value."
+}
+
+func (clusterIDRequiresReplaceModifier) MarkdownDescription(ctx context.Context) string {
+	return clusterIDRequiresReplaceModifier{}.Description(ctx)
+}
+
+func (clusterIDRequiresReplaceModifier) PlanModifyString(ctx context.Context, req planmodifier.StringRequest, resp *planmodifier.StringResponse) {
+	if req.PlanValue.IsUnknown() || req.PlanValue.IsNull() {
+		return
+	}
+	if req.StateValue.IsUnknown() || req.StateValue.IsNull() {
+		return
+	}
+
+	if req.PlanValue.ValueString() != req.StateValue.ValueString() {
+		resp.RequiresReplace = true
+	}
+}
+
 // New creates a new machine deployment v2 resource.
 func New() resource.Resource { return &resourceMachineDeployment{} }
 
@@ -83,7 +110,7 @@ func (r *resourceMachineDeployment) buildClusterIDAttribute() rschema.StringAttr
 		Required:    true,
 		Description: "Cluster ID to deploy machines to.",
 		PlanModifiers: []planmodifier.String{
-			stringplanmodifier.RequiresReplace(),
+			clusterIDRequiresReplaceModifier{},
 		},
 	}
 }
