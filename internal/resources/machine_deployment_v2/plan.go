@@ -146,7 +146,10 @@ func (p *Plan) buildMachineDeploymentSpec() (*models.NodeDeployment, error) {
 			cloudSpec.AvailabilityZone = os.AvailabilityZone
 		}
 
-		// TODO: Disk size configuration - need to check OpenStack node spec fields
+		// Configure custom root disk size when explicitly requested.
+		if os.DiskSize > 0 {
+			cloudSpec.RootDiskSizeGB = int64(os.DiskSize)
+		}
 
 		spec.Template.Cloud = &models.NodeCloudSpec{
 			Openstack: cloudSpec,
