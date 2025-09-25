@@ -22,7 +22,7 @@ terraform {
   required_providers {
     kkp = {
       source  = "armagankaratosun/kkp"
-      version = "~> 0.1.6"
+      version = "~> 0.1.7"
     }
   }
 }
