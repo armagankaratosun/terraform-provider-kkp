@@ -14,7 +14,7 @@ MAKEFLAGS += --no-print-directory
 VERSION?=$(shell git describe --tags --exact-match 2>/dev/null || cat VERSION 2>/dev/null || echo dev)
 VER_PLAIN:=$(patsubst v%,%,$(VERSION))
 # Auto-commit behavior for `make docs` (0=off, 1=commit changes)
-AUTO_COMMIT?=1
+AUTO_COMMIT?=0
 
 help: ## Display this help message
 	@echo "Available targets:"
