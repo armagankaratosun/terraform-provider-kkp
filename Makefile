@@ -12,7 +12,6 @@ MAKEFLAGS += --no-print-directory
 # 2) VERSION file contents
 # 3) fallback: dev
 VERSION?=$(shell git describe --tags --exact-match 2>/dev/null || cat VERSION 2>/dev/null || echo dev)
-VER_PLAIN:=$(patsubst v%,%,$(VERSION))
 # Auto-commit behavior for `make docs` (0=off, 1=commit changes)
 AUTO_COMMIT?=0
 
@@ -61,7 +60,7 @@ install: build ## Install the provider binary to local Terraform plugin director
 	  echo "ERROR: VERSION is required for 'make install' (e.g., VERSION=v0.1.0)" >&2; exit 1; \
 	fi
 	@echo "Installing provider locally..."
-	@VER_PLAIN="$(VER_PLAIN)"; \
+	@VER_PLAIN="$(patsubst v%,%,$(VERSION))"; \
 	mkdir -p $$HOME/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$$VER_PLAIN/$(GOOS)_$(GOARCH)/; \
 	cp $(BUILD_DIR)/$(BINARY_NAME)_$(VERSION) $$HOME/.terraform.d/plugins/registry.terraform.io/armagankaratosun/kkp/$$VER_PLAIN/$(GOOS)_$(GOARCH)/$(BINARY_NAME)_$(VERSION); \
 	echo "Provider installed to $$HOME/.terraform.d/plugins/"
@@ -143,13 +142,16 @@ examples-validate: ## Validate examples against locally built provider (no regis
 	  echo "All examples validated."; \
 	  rm -rf "$$workdir" "$$tmp_rc"
 
-# Usage: make examples-bump-version EXAMPLES_VERSION=0.1.0
-examples-bump-version: ## Bump provider version constraint in examples (EXAMPLES_VERSION=0.1.0)
-	@if [ -z "$(EXAMPLES_VERSION)" ]; then echo "ERROR: EXAMPLES_VERSION is required (e.g., EXAMPLES_VERSION=0.1.0)" >&2; exit 1; fi
-	@echo "Bumping examples provider version to ~> $(EXAMPLES_VERSION) ..."
-	@find examples -type f -name 'main.tf' -print0 | xargs -0 sed -i.bak -E 's/(version\s*=\s*")(~>\s*)?[^\"]+(\".*)/\1~> $(EXAMPLES_VERSION)\3/'; \
-	find examples -type f -name '*.bak' -delete; \
-	echo "Done. Run 'make examples-version-check' to verify."
+# Usage: make examples-bump-version VERSION=v0.1.0
+examples-bump-version: ## Bump provider version constraint in examples (uses VERSION)
+	@if [ "$(VERSION)" = "dev" ]; then \
+		echo "ERROR: Set VERSION (vX.Y.Z) before bumping examples." >&2; \
+		exit 1; \
+	fi
+	@echo "Bumping examples provider version to ~> $(patsubst v%,%,$(VERSION)) ..."
+	@find examples -type f -name 'main.tf' -exec sed -i.bak -E 's/(version[[:space:]]*=[[:space:]]*")(~>[[:space:]]*)?[^\"]+(\".*)/\1~> $(patsubst v%,%,$(VERSION))\3/' {} \;
+	@find examples -type f -name '*.bak' -delete
+	@echo "Done. Run 'make examples-version-check' to verify."
 
 examples-version-check: ## Print current provider version constraints used in examples
 	@rg -n "required_providers|source\s*=\s*\"armagankaratosun/kkp\"|version\s*=\s*\"~>" examples -S || true
@@ -168,8 +170,8 @@ release: clean test lint build ## Release build (clean, test, lint, build)
 
 # Documentation
 docs: ## Generate docs, sync version snippets, and verify clean
-	@echo "Syncing docs version (resolved: $(VERSION), plain: $(VER_PLAIN))..."
-	@if [ "$(VER_PLAIN)" != "dev" ]; then \
+	@echo "Syncing docs version (resolved: $(VERSION))..."
+	@if [ "$(VERSION)" != "dev" ]; then \
 	  $(MAKE) bump-docs-version; \
 	else \
 	  echo "Skipping version bump (VERSION=dev)"; \
@@ -188,8 +190,8 @@ docs: ## Generate docs, sync version snippets, and verify clean
 	  if [ "$(AUTO_COMMIT)" = "1" ]; then \
 	    echo "Auto-committing docs/snippets updates..."; \
 	    git add docs templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md examples; \
-	    if [ "$(VER_PLAIN)" != "dev" ]; then \
-	      git commit -m "docs: bump provider snippets to ~> $(VER_PLAIN); regenerate"; \
+	    if [ "$(VERSION)" != "dev" ]; then \
+	      git commit -m "docs: bump provider snippets to ~> $(patsubst v%,%,$(VERSION)); regenerate"; \
 	    else \
 	      git commit -m "docs: regenerate with tfplugindocs"; \
 	    fi; \
@@ -256,18 +258,15 @@ snapshot: ## Build snapshot artifacts locally with GoReleaser (no publish)
 	@GOCACHE=$(PWD)/.cache/gobuild GOMODCACHE=$(PWD)/.cache/gomod goreleaser release --clean --snapshot --skip=publish
 
 # Version helpers
-print-version: ## Print resolved VERSION and VER_PLAIN
+print-version: ## Print resolved VERSION
 	@echo VERSION=$(VERSION)
-	@echo VER_PLAIN=$(VER_PLAIN)
 
-bump-docs-version: ## Update version in templates and examples using VER_PLAIN
-	@if [ -z "$(VER_PLAIN)" ] || [ "$(VER_PLAIN)" = "dev" ]; then \
+bump-docs-version: ## Update version in templates and examples using VERSION
+	@if [ "$(VERSION)" = "dev" ]; then \
 	  echo "ERROR: Set VERSION (vX.Y.Z) or create a VERSION file before bumping." >&2; exit 1; \
 	fi
-	@echo "Updating templates and README to use ~> $(VER_PLAIN) ..."
-	@sed -i.bak -E 's/^([[:space:]]*version[[:space:]]*=[[:space:]]*")(~>[[:space:]]*)?[^\"]+(\")/\1~> $(VER_PLAIN)\3/' \
-	  templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md; \
-	  rm -f templates/index.md.tmpl.bak templates/guides/getting-started.md.tmpl.bak README.md.bak; \
-	  true
-	@echo "Bumping example provider constraints to ~> $(VER_PLAIN) ..."
-	@$(MAKE) examples-bump-version EXAMPLES_VERSION=$(VER_PLAIN)
+	@echo "Updating templates and README to use ~> $(patsubst v%,%,$(VERSION)) ..."
+	@perl -0pi -e 's/(version\s*=\s*")(~>\s*)?[^"\n]+(")/$1~> $(patsubst v%,%,$(VERSION))$3/g' \
+	  templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md
+	@echo "Bumping example provider constraints to ~> $(patsubst v%,%,$(VERSION)) ..."
+	@$(MAKE) examples-bump-version
