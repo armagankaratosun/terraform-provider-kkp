@@ -1,6 +1,7 @@
 package kkp
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	tftypes "github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -135,6 +137,61 @@ func IsAttributeSet(attr interface{}) bool {
 		return !v.IsNull() && !v.IsUnknown()
 	default:
 		return false
+	}
+}
+
+// MergeInt64 copies src into dst when dst is null or unknown.
+func MergeInt64(dst *tftypes.Int64, src tftypes.Int64) {
+	if dst == nil {
+		return
+	}
+	if dst.IsNull() || dst.IsUnknown() {
+		*dst = src
+	}
+}
+
+// ---------- Plan Modifiers ----------
+
+// Int64RequiresReplaceModifier forces replacement when an int64 attribute changes to a different known value.
+type Int64RequiresReplaceModifier struct{}
+
+func (Int64RequiresReplaceModifier) Description(context.Context) string {
+	return "Requires replacement when the attribute changes to a different known value."
+}
+
+func (Int64RequiresReplaceModifier) MarkdownDescription(ctx context.Context) string {
+	return Int64RequiresReplaceModifier{}.Description(ctx)
+}
+
+func (Int64RequiresReplaceModifier) PlanModifyInt64(ctx context.Context, req planmodifier.Int64Request, resp *planmodifier.Int64Response) {
+	if req.PlanValue.IsUnknown() || req.PlanValue.IsNull() {
+		return
+	}
+	if req.StateValue.IsUnknown() || req.StateValue.IsNull() {
+		return
+	}
+	if req.PlanValue.ValueInt64() != req.StateValue.ValueInt64() {
+		resp.RequiresReplace = true
+	}
+}
+
+// MergeString copies src into dst when dst is null or unknown.
+func MergeString(dst *tftypes.String, src tftypes.String) {
+	if dst == nil {
+		return
+	}
+	if dst.IsNull() || dst.IsUnknown() {
+		*dst = src
+	}
+}
+
+// MergeBool copies src into dst when dst is null or unknown.
+func MergeBool(dst *tftypes.Bool, src tftypes.Bool) {
+	if dst == nil {
+		return
+	}
+	if dst.IsNull() || dst.IsUnknown() {
+		*dst = src
 	}
 }
 

@@ -231,6 +231,9 @@ func (r *resourceMachineDeployment) buildOpenstackBlock() rschema.SingleNestedBl
 					int64validator.AtLeast(1),
 					int64validator.AtMost(1000),
 				},
+				PlanModifiers: []planmodifier.Int64{
+					kkp.Int64RequiresReplaceModifier{},
+				},
 			},
 			"availability_zone": rschema.StringAttribute{
 				Optional:    true,
@@ -365,7 +368,8 @@ func (r *resourceMachineDeployment) Update(ctx context.Context, req resource.Upd
 	// Detect changes that need to be applied
 	changes := r.detectUpdateChanges(*plan, state)
 	if !changes.hasChanges() {
-		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
+		merged := mergePlanWithExistingState(*plan, state)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &merged)...)
 		return
 	}
 
@@ -736,6 +740,31 @@ func (r *resourceMachineDeployment) detectUpdateChanges(plan, state machineDeplo
 		wantMinReplicas: wantMinReplicas,
 		wantMaxReplicas: wantMaxReplicas,
 	}
+}
+
+// mergePlanWithExistingState fills any unknown computed fields in plan with
+// their values from the current state. This prevents the framework from
+// treating them as unknown during a no-op update.
+func mergePlanWithExistingState(plan, state machineDeploymentState) machineDeploymentState {
+	merged := plan
+
+	merged.ID = state.ID
+	merged.ClusterID = state.ClusterID
+
+	kkp.MergeInt64(&merged.Replicas, state.Replicas)
+	kkp.MergeString(&merged.K8sVersion, state.K8sVersion)
+	kkp.MergeInt64(&merged.MinReadySeconds, state.MinReadySeconds)
+	kkp.MergeBool(&merged.Paused, state.Paused)
+
+	if merged.OpenStack != nil && state.OpenStack != nil {
+		kkp.MergeInt64(&merged.OpenStack.DiskSize, state.OpenStack.DiskSize)
+		kkp.MergeBool(&merged.OpenStack.UseFloatingIP, state.OpenStack.UseFloatingIP)
+		kkp.MergeString(&merged.OpenStack.Image, state.OpenStack.Image)
+		kkp.MergeString(&merged.OpenStack.Flavor, state.OpenStack.Flavor)
+		kkp.MergeString(&merged.OpenStack.AvailabilityZone, state.OpenStack.AvailabilityZone)
+	}
+
+	return merged
 }
 
 // applyUpdateChanges applies the detected changes by building a patch and executing it.
