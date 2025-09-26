@@ -26,7 +26,7 @@ terraform {
   required_providers {
     kkp = {
       source  = "armagankaratosun/kkp"
-      version = "~> 0.1.8" # pin to a minor series
+      ~> 0.1.8 # pin to a minor series
     }
   }
 }
@@ -45,7 +45,7 @@ provider "kkp" {
 ```hcl
 resource "kkp_cluster_v2" "cluster" {
   name        = "quickstart-cluster"     # change if you like
-  k8s_version = "1.29.0"                  # use a supported version
+  k8s_~> 0.1.8                  # use a supported version
   datacenter  = "openstack-eu-west"       # your KKP datacenter name
   cloud       = "openstack"
 
