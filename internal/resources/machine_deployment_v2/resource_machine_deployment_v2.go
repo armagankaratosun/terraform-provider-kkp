@@ -305,7 +305,11 @@ func (r *resourceMachineDeployment) Read(ctx context.Context, req resource.ReadR
 	id := strings.TrimSpace(state.ID.ValueString())
 	clusterID := strings.TrimSpace(state.ClusterID.ValueString())
 	if id == "" || clusterID == "" {
-		resp.Diagnostics.AddError("Missing identifiers", "State missing machine deployment or cluster ID.")
+		tflog.Warn(ctx, "state missing machine deployment identifiers; removing resource", map[string]any{
+			"id":         id,
+			"cluster_id": clusterID,
+		})
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
