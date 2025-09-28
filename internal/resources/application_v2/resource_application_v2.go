@@ -253,7 +253,10 @@ func (r *resourceApplication) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	appID := out.Payload.ID
+	appID := strings.TrimSpace(out.Payload.ID)
+	if appID == "" {
+		appID = r.fallbackApplicationID(cp.ClusterID, cp.Namespace, cp.Name)
+	}
 
 	tflog.Info(ctx, "application created successfully", map[string]any{
 		"cluster_id":  cp.ClusterID,
@@ -357,7 +360,7 @@ func (r *resourceApplication) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	r.updateStateFromApplication(state, application)
+	r.updateStateFromApplication(state, application, clusterID, namespace)
 	r.refreshApplicationStatus(ctx, state, clusterID, namespace, name)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
@@ -365,13 +368,17 @@ func (r *resourceApplication) Read(ctx context.Context, req resource.ReadRequest
 
 // extractApplicationIdentifiers extracts and validates application identifiers from state.
 func (r *resourceApplication) extractApplicationIdentifiers(state *applicationState, resp *resource.ReadResponse) (id, clusterID, namespace, name string) {
-	id = kkp.TrimmedStringValue(state.ID)
 	clusterID = kkp.TrimmedStringValue(state.ClusterID)
 	namespace = kkp.TrimmedStringValue(state.Namespace)
 	name = kkp.TrimmedStringValue(state.Name)
-	if id == "" || clusterID == "" || namespace == "" || name == "" {
-		resp.Diagnostics.AddError("Missing identifiers", "State missing required identifiers.")
+	if clusterID == "" || namespace == "" || name == "" {
+		resp.Diagnostics.AddError("Missing identifiers", "State missing required identifiers (cluster_id, namespace, name).")
 		return "", "", "", ""
+	}
+	id = kkp.TrimmedStringValue(state.ID)
+	if id == "" {
+		id = r.fallbackApplicationID(clusterID, namespace, name)
+		state.ID = tftypes.StringValue(id)
 	}
 	return id, clusterID, namespace, name
 }
@@ -398,8 +405,12 @@ func (r *resourceApplication) handleFetchApplicationError(ctx context.Context, e
 }
 
 // updateStateFromApplication updates state with application details from API response.
-func (r *resourceApplication) updateStateFromApplication(state *applicationState, application *acli.GetApplicationInstallationOK) {
-	state.ID = tftypes.StringValue(application.Payload.ID)
+func (r *resourceApplication) updateStateFromApplication(state *applicationState, application *acli.GetApplicationInstallationOK, clusterID, namespace string) {
+	apiID := strings.TrimSpace(application.Payload.ID)
+	if apiID == "" {
+		apiID = r.fallbackApplicationID(clusterID, namespace, application.Payload.Name)
+	}
+	state.ID = tftypes.StringValue(apiID)
 	state.Name = tftypes.StringValue(application.Payload.Name)
 	state.Namespace = tftypes.StringValue(application.Payload.Namespace)
 
@@ -460,9 +471,12 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 	clusterID := kkp.TrimmedStringValue(state.ClusterID)
 	namespace := kkp.TrimmedStringValue(state.Namespace)
 	name := kkp.TrimmedStringValue(state.Name)
-	if id == "" || clusterID == "" || namespace == "" || name == "" {
+	if clusterID == "" || namespace == "" || name == "" {
 		resp.Diagnostics.AddError("Missing identifiers", "State missing required identifiers.")
 		return
+	}
+	if id == "" {
+		id = r.fallbackApplicationID(clusterID, namespace, name)
 	}
 
 	// Build update body from plan
@@ -535,7 +549,11 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 
 	// Build final state with known values from API response
 	finalState := plan
-	finalState.ID = state.ID
+	currentID := kkp.TrimmedStringValue(state.ID)
+	if currentID == "" {
+		currentID = r.fallbackApplicationID(clusterID, namespace, got.Payload.Name)
+	}
+	finalState.ID = tftypes.StringValue(currentID)
 	finalState.ClusterID = state.ClusterID
 	finalState.Name = tftypes.StringValue(got.Payload.Name)
 	finalState.Namespace = tftypes.StringValue(got.Payload.Namespace)
@@ -588,8 +606,11 @@ func (r *resourceApplication) Delete(ctx context.Context, req resource.DeleteReq
 	clusterID := kkp.TrimmedStringValue(state.ClusterID)
 	namespace := kkp.TrimmedStringValue(state.Namespace)
 	name := kkp.TrimmedStringValue(state.Name)
-	if id == "" || clusterID == "" || namespace == "" || name == "" {
+	if clusterID == "" || namespace == "" || name == "" {
 		return
+	}
+	if id == "" {
+		id = r.fallbackApplicationID(clusterID, namespace, name)
 	}
 
 	aclient := acli.New(r.Client.Transport, nil)
@@ -754,6 +775,10 @@ func (r *resourceApplication) waitForApplicationReady(ctx context.Context, clust
 		"max_attempts": maxAttempts,
 	})
 	return "installing", fmt.Sprintf("Installation timeout after %v - application may still be installing", maxWaitTime)
+}
+
+func (r *resourceApplication) fallbackApplicationID(clusterID, namespace, name string) string {
+	return fmt.Sprintf("%s/%s/%s", strings.TrimSpace(clusterID), strings.TrimSpace(namespace), strings.TrimSpace(name))
 }
 
 // Helper function to update status fields in state
