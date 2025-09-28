@@ -41,7 +41,8 @@ type applicationState struct {
 	ApplicationVersion tftypes.String `tfsdk:"application_version"`
 
 	// Configuration
-	Values tftypes.String `tfsdk:"values"` // JSON string for values
+	Values     tftypes.String `tfsdk:"values"`      // JSON string for values
+	ValuesFile tftypes.String `tfsdk:"values_file"` // Path to YAML values file
 
 	// Installation control
 	WaitForReady   tftypes.Bool  `tfsdk:"wait_for_ready"`  // Wait for application to be ready during creation

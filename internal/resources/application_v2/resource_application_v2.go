@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 
 	acli "github.com/kubermatic/go-kubermatic/client/applications"
 	"github.com/kubermatic/go-kubermatic/models"
+	yaml "gopkg.in/yaml.v3"
 )
 
 var (
@@ -53,6 +55,7 @@ func (r *resourceApplication) buildSchemaAttributes() map[string]rschema.Attribu
 		"application_name":    r.buildApplicationNameAttribute(),
 		"application_version": r.buildApplicationVersionAttribute(),
 		"values":              r.buildValuesAttribute(),
+		"values_file":         r.buildValuesFileAttribute(),
 		"wait_for_ready":      r.buildWaitForReadyAttribute(),
 		"timeout_minutes":     r.buildTimeoutMinutesAttribute(),
 		"status":              r.buildStatusAttribute(),
@@ -141,6 +144,13 @@ func (r *resourceApplication) buildValuesAttribute() rschema.StringAttribute {
 	}
 }
 
+func (r *resourceApplication) buildValuesFileAttribute() rschema.StringAttribute {
+	return rschema.StringAttribute{
+		Optional:    true,
+		Description: "Path to a YAML file containing application configuration values.",
+	}
+}
+
 // buildWaitForReadyAttribute builds the wait_for_ready attribute.
 func (r *resourceApplication) buildWaitForReadyAttribute() rschema.BoolAttribute {
 	return rschema.BoolAttribute{
@@ -213,6 +223,11 @@ func (r *resourceApplication) Create(ctx context.Context, req resource.CreateReq
 		ApplicationVersion: plan.ApplicationVersion.ValueString(),
 	}
 
+	var (
+		planValuesJSON string
+		valuesProvided bool
+	)
+
 	// Parse values JSON if provided
 	if !plan.Values.IsNull() && !plan.Values.IsUnknown() {
 		valuesStr := strings.TrimSpace(plan.Values.ValueString())
@@ -223,6 +238,29 @@ func (r *resourceApplication) Create(ctx context.Context, req resource.CreateReq
 				return
 			}
 			cp.Values = values
+			planValuesJSON = valuesStr
+			valuesProvided = true
+		}
+	}
+
+	// Parse values from YAML file if provided
+	if !plan.ValuesFile.IsNull() && !plan.ValuesFile.IsUnknown() {
+		valuesPath := strings.TrimSpace(plan.ValuesFile.ValueString())
+		if valuesPath != "" {
+			if valuesProvided {
+				resp.Diagnostics.AddError("Duplicate values configuration", "Set either `values` or `values_file`, not both.")
+				return
+			}
+			decoded, jsonString, err := r.decodeValuesYAML(valuesPath)
+			if err != nil {
+				resp.Diagnostics.AddError("Invalid values_file", err.Error())
+				return
+			}
+			if decoded != nil {
+				cp.Values = decoded
+				planValuesJSON = jsonString
+				valuesProvided = true
+			}
 		}
 	}
 
@@ -271,6 +309,10 @@ func (r *resourceApplication) Create(ctx context.Context, req resource.CreateReq
 	state.ID = tftypes.StringValue(appID)
 	state.Name = tftypes.StringValue(out.Payload.Name)
 	state.Namespace = tftypes.StringValue(out.Payload.Namespace)
+	if planValuesJSON != "" {
+		state.Values = tftypes.StringValue(planValuesJSON)
+	}
+	state.ValuesFile = plan.ValuesFile
 
 	// Set defaults for optional fields
 	waitForReady := true
@@ -502,11 +544,39 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 		Namespace:      namespaceSpec,
 	}
 
-	// Add values if provided
+	var (
+		updateValuesJSON     string
+		updateValuesProvided bool
+	)
+
+	// Add values if provided as JSON
 	if !plan.Values.IsNull() && !plan.Values.IsUnknown() {
 		valuesStr := strings.TrimSpace(plan.Values.ValueString())
 		if valuesStr != "" {
 			spec.Values = models.RawExtension(valuesStr)
+			updateValuesJSON = valuesStr
+			updateValuesProvided = true
+		}
+	}
+
+	// Add values from YAML file if provided
+	if !plan.ValuesFile.IsNull() && !plan.ValuesFile.IsUnknown() {
+		valuesPath := strings.TrimSpace(plan.ValuesFile.ValueString())
+		if valuesPath != "" {
+			if updateValuesProvided {
+				resp.Diagnostics.AddError("Duplicate values configuration", "Set either `values` or `values_file`, not both.")
+				return
+			}
+			decoded, jsonString, err := r.decodeValuesYAML(valuesPath)
+			if err != nil {
+				resp.Diagnostics.AddError("Invalid values_file", err.Error())
+				return
+			}
+			if decoded != nil {
+				spec.Values = models.RawExtension(jsonString)
+				updateValuesJSON = jsonString
+				updateValuesProvided = true
+			}
 		}
 	}
 
@@ -557,6 +627,10 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 	finalState.ClusterID = state.ClusterID
 	finalState.Name = tftypes.StringValue(got.Payload.Name)
 	finalState.Namespace = tftypes.StringValue(got.Payload.Namespace)
+	if updateValuesJSON != "" {
+		finalState.Values = tftypes.StringValue(updateValuesJSON)
+	}
+	finalState.ValuesFile = plan.ValuesFile
 
 	// Preserve creation timestamp from previous state
 	finalState.CreatedAt = state.CreatedAt
@@ -775,6 +849,61 @@ func (r *resourceApplication) waitForApplicationReady(ctx context.Context, clust
 		"max_attempts": maxAttempts,
 	})
 	return "installing", fmt.Sprintf("Installation timeout after %v - application may still be installing", maxWaitTime)
+}
+
+func (r *resourceApplication) decodeValuesYAML(path string) (interface{}, string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("read values_file %q: %w", path, err)
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return nil, "", nil
+	}
+	var raw interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, "", fmt.Errorf("parse values_file YAML: %w", err)
+	}
+	if raw == nil {
+		return nil, "", nil
+	}
+	jsonCompatible := convertYAMLToJSONCompatible(raw)
+	jsonBytes, err := json.Marshal(jsonCompatible)
+	if err != nil {
+		return nil, "", fmt.Errorf("serialize YAML content to JSON: %w", err)
+	}
+	jsonStr := strings.TrimSpace(string(jsonBytes))
+	if jsonStr == "" || jsonStr == "null" {
+		return nil, "", nil
+	}
+	values, err := kkp.JSONToVariables(jsonStr)
+	if err != nil {
+		return nil, "", err
+	}
+	return values, jsonStr, nil
+}
+
+func convertYAMLToJSONCompatible(input interface{}) interface{} {
+	switch v := input.(type) {
+	case map[string]interface{}:
+		converted := make(map[string]interface{}, len(v))
+		for key, val := range v {
+			converted[key] = convertYAMLToJSONCompatible(val)
+		}
+		return converted
+	case map[interface{}]interface{}:
+		converted := make(map[string]interface{}, len(v))
+		for key, val := range v {
+			converted[fmt.Sprint(key)] = convertYAMLToJSONCompatible(val)
+		}
+		return converted
+	case []interface{}:
+		for i, item := range v {
+			v[i] = convertYAMLToJSONCompatible(item)
+		}
+		return v
+	default:
+		return v
+	}
 }
 
 func (r *resourceApplication) fallbackApplicationID(clusterID, namespace, name string) string {
