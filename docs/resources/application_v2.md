@@ -27,7 +27,7 @@ Create a KKP application installation for a cluster using V2 API.
 - `namespace` (String) Kubernetes namespace for the application installation. Defaults to 'default'.
 - `timeout_minutes` (Number) Timeout in minutes for waiting for application to be ready. Defaults to 5 minutes.
 - `values` (String) Application configuration values as JSON string (e.g., Helm values).
-- `values_file` (String) Path to a YAML file containing application configuration values.
+- `values_file` (String) Path to a YAML file containing application configuration values. Mutually exclusive with `values`.
 - `wait_for_ready` (Boolean) Wait for application to be ready during creation. Defaults to true.
 
 ### Read-Only

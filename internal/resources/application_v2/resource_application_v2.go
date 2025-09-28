@@ -31,6 +31,11 @@ var (
 	_ resource.ResourceWithImportState = &resourceApplication{}
 )
 
+const (
+	jsonNullString   = "null"
+	jsonEmptyMapSpec = "map[]"
+)
+
 // New creates a new application v2 resource.
 func New() resource.Resource { return &resourceApplication{} }
 
@@ -223,45 +228,13 @@ func (r *resourceApplication) Create(ctx context.Context, req resource.CreateReq
 		ApplicationVersion: plan.ApplicationVersion.ValueString(),
 	}
 
-	var (
-		planValuesJSON string
-		valuesProvided bool
-	)
-
-	// Parse values JSON if provided
-	if !plan.Values.IsNull() && !plan.Values.IsUnknown() {
-		valuesStr := strings.TrimSpace(plan.Values.ValueString())
-		if valuesStr != "" {
-			values, err := kkp.JSONToVariables(valuesStr)
-			if err != nil {
-				resp.Diagnostics.AddError("Invalid values JSON", err.Error())
-				return
-			}
-			cp.Values = values
-			planValuesJSON = valuesStr
-			valuesProvided = true
-		}
+	valuesData, planValuesJSON, err := r.resolveValuesConfig(plan.Values, plan.ValuesFile)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid values configuration", err.Error())
+		return
 	}
-
-	// Parse values from YAML file if provided
-	if !plan.ValuesFile.IsNull() && !plan.ValuesFile.IsUnknown() {
-		valuesPath := strings.TrimSpace(plan.ValuesFile.ValueString())
-		if valuesPath != "" {
-			if valuesProvided {
-				resp.Diagnostics.AddError("Duplicate values configuration", "Set either `values` or `values_file`, not both.")
-				return
-			}
-			decoded, jsonString, err := r.decodeValuesYAML(valuesPath)
-			if err != nil {
-				resp.Diagnostics.AddError("Invalid values_file", err.Error())
-				return
-			}
-			if decoded != nil {
-				cp.Values = decoded
-				planValuesJSON = jsonString
-				valuesProvided = true
-			}
-		}
+	if valuesData != nil {
+		cp.Values = valuesData
 	}
 
 	appInstallation, err := cp.ToApplicationInstallation()
@@ -309,6 +282,7 @@ func (r *resourceApplication) Create(ctx context.Context, req resource.CreateReq
 	state.ID = tftypes.StringValue(appID)
 	state.Name = tftypes.StringValue(out.Payload.Name)
 	state.Namespace = tftypes.StringValue(out.Payload.Namespace)
+	state.Values = plan.Values
 	if planValuesJSON != "" {
 		state.Values = tftypes.StringValue(planValuesJSON)
 	}
@@ -470,7 +444,7 @@ func (r *resourceApplication) updateStateFromApplication(state *applicationState
 
 		// Convert values to JSON string, preserving null state if values are empty
 		if application.Payload.Spec.Values != nil {
-			if valuesStr := fmt.Sprintf("%v", application.Payload.Spec.Values); valuesStr != "" && valuesStr != "null" && valuesStr != "map[]" {
+			if valuesStr := fmt.Sprintf("%v", application.Payload.Spec.Values); valuesStr != "" && valuesStr != jsonNullString && valuesStr != jsonEmptyMapSpec {
 				state.Values = tftypes.StringValue(valuesStr)
 			}
 			// Don't modify state.Values if API returned empty/null - preserve existing state
@@ -544,46 +518,21 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 		Namespace:      namespaceSpec,
 	}
 
-	var (
-		updateValuesJSON     string
-		updateValuesProvided bool
-	)
+	var updateValuesJSON string
 
-	// Add values if provided as JSON
-	if !plan.Values.IsNull() && !plan.Values.IsUnknown() {
-		valuesStr := strings.TrimSpace(plan.Values.ValueString())
-		if valuesStr != "" {
-			spec.Values = models.RawExtension(valuesStr)
-			updateValuesJSON = valuesStr
-			updateValuesProvided = true
-		}
+	_, updateValuesJSON, err := r.resolveValuesConfig(plan.Values, plan.ValuesFile)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid values configuration", err.Error())
+		return
 	}
-
-	// Add values from YAML file if provided
-	if !plan.ValuesFile.IsNull() && !plan.ValuesFile.IsUnknown() {
-		valuesPath := strings.TrimSpace(plan.ValuesFile.ValueString())
-		if valuesPath != "" {
-			if updateValuesProvided {
-				resp.Diagnostics.AddError("Duplicate values configuration", "Set either `values` or `values_file`, not both.")
-				return
-			}
-			decoded, jsonString, err := r.decodeValuesYAML(valuesPath)
-			if err != nil {
-				resp.Diagnostics.AddError("Invalid values_file", err.Error())
-				return
-			}
-			if decoded != nil {
-				spec.Values = models.RawExtension(jsonString)
-				updateValuesJSON = jsonString
-				updateValuesProvided = true
-			}
-		}
+	if updateValuesJSON != "" {
+		spec.Values = models.RawExtension(updateValuesJSON)
 	}
 
 	updateBody.Spec = spec
 
 	aclient := acli.New(r.Client.Transport, nil)
-	_, err := aclient.UpdateApplicationInstallation(
+	_, err = aclient.UpdateApplicationInstallation(
 		acli.NewUpdateApplicationInstallationParams().
 			WithProjectID(r.DefaultProjectID).
 			WithClusterID(clusterID).
@@ -611,7 +560,8 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 		WithNamespace(namespace).
 		WithApplicationInstallationName(name)
 
-	got, err := aclient.GetApplicationInstallation(get, nil)
+	var got *acli.GetApplicationInstallationOK
+	got, err = aclient.GetApplicationInstallation(get, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("Read application after update failed", err.Error())
 		return
@@ -627,6 +577,7 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 	finalState.ClusterID = state.ClusterID
 	finalState.Name = tftypes.StringValue(got.Payload.Name)
 	finalState.Namespace = tftypes.StringValue(got.Payload.Namespace)
+	finalState.Values = plan.Values
 	if updateValuesJSON != "" {
 		finalState.Values = tftypes.StringValue(updateValuesJSON)
 	}
@@ -646,7 +597,7 @@ func (r *resourceApplication) Update(ctx context.Context, req resource.UpdateReq
 
 		// Handle values field - preserve null state when appropriate
 		if got.Payload.Spec.Values != nil {
-			if valuesStr := fmt.Sprintf("%v", got.Payload.Spec.Values); valuesStr != "" && valuesStr != "null" && valuesStr != "map[]" {
+			if valuesStr := fmt.Sprintf("%v", got.Payload.Spec.Values); valuesStr != "" && valuesStr != jsonNullString && valuesStr != jsonEmptyMapSpec {
 				finalState.Values = tftypes.StringValue(valuesStr)
 			} else if !plan.Values.IsNull() {
 				// Preserve planned values if API returned empty but user provided values
@@ -676,15 +627,11 @@ func (r *resourceApplication) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	id := kkp.TrimmedStringValue(state.ID)
 	clusterID := kkp.TrimmedStringValue(state.ClusterID)
 	namespace := kkp.TrimmedStringValue(state.Namespace)
 	name := kkp.TrimmedStringValue(state.Name)
 	if clusterID == "" || namespace == "" || name == "" {
 		return
-	}
-	if id == "" {
-		id = r.fallbackApplicationID(clusterID, namespace, name)
 	}
 
 	aclient := acli.New(r.Client.Transport, nil)
@@ -851,16 +798,52 @@ func (r *resourceApplication) waitForApplicationReady(ctx context.Context, clust
 	return "installing", fmt.Sprintf("Installation timeout after %v - application may still be installing", maxWaitTime)
 }
 
+func (r *resourceApplication) resolveValuesConfig(valuesAttr, valuesFileAttr tftypes.String) (interface{}, string, error) {
+	var (
+		parsed  interface{}
+		jsonStr string
+	)
+
+	if !valuesAttr.IsNull() && !valuesAttr.IsUnknown() {
+		jsonStr = strings.TrimSpace(valuesAttr.ValueString())
+		if jsonStr != "" {
+			vals, err := kkp.JSONToVariables(jsonStr)
+			if err != nil {
+				return nil, "", fmt.Errorf("parse values: %w", err)
+			}
+			parsed = vals
+		}
+	}
+
+	if !valuesFileAttr.IsNull() && !valuesFileAttr.IsUnknown() {
+		filePath := strings.TrimSpace(valuesFileAttr.ValueString())
+		if filePath != "" {
+			if jsonStr != "" {
+				return nil, "", fmt.Errorf("duplicate values configuration: set either `values` or `values_file`, not both")
+			}
+			vals, fileJSON, err := r.decodeValuesYAML(filePath)
+			if err != nil {
+				return nil, "", err
+			}
+			parsed = vals
+			jsonStr = fileJSON
+		}
+	}
+
+	return parsed, jsonStr, nil
+}
+
 func (r *resourceApplication) decodeValuesYAML(path string) (interface{}, string, error) {
+	// #nosec G304 -- values_file is a user-supplied path and expected by the provider
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, "", fmt.Errorf("read values_file %q: %w", path, err)
 	}
-	if len(strings.TrimSpace(string(data))) == 0 {
+	if strings.TrimSpace(string(data)) == "" {
 		return nil, "", nil
 	}
 	var raw interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	if err = yaml.Unmarshal(data, &raw); err != nil {
 		return nil, "", fmt.Errorf("parse values_file YAML: %w", err)
 	}
 	if raw == nil {
@@ -872,7 +855,7 @@ func (r *resourceApplication) decodeValuesYAML(path string) (interface{}, string
 		return nil, "", fmt.Errorf("serialize YAML content to JSON: %w", err)
 	}
 	jsonStr := strings.TrimSpace(string(jsonBytes))
-	if jsonStr == "" || jsonStr == "null" {
+	if jsonStr == "" || jsonStr == jsonNullString {
 		return nil, "", nil
 	}
 	values, err := kkp.JSONToVariables(jsonStr)

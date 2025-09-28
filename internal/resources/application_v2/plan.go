@@ -60,12 +60,7 @@ func (p *Plan) buildApplicationInstallation() (*models.ApplicationInstallation, 
 
 	// Add values if provided
 	if p.Values != nil {
-		valuesJSON, err := kkp.VariablesToJSON(p.Values)
-		if err != nil {
-			return nil, err
-		}
-		// RawExtension expects raw JSON bytes
-		spec.Values = models.RawExtension(valuesJSON)
+		spec.Values = models.RawExtension(p.Values)
 	}
 
 	return &models.ApplicationInstallation{
