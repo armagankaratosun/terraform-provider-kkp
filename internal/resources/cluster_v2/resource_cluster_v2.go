@@ -89,9 +89,6 @@ func (r *resourceCluster) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"preset": rschema.StringAttribute{
 				Optional:    true,
 				Description: "KKP preset/credential name. Leave empty when using OpenStack application credentials.",
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"cloud": rschema.StringAttribute{
 				Required:    true,
@@ -469,6 +466,13 @@ func (r *resourceCluster) Read(ctx context.Context, req resource.ReadRequest, re
 			resp.Diagnostics.AddError("List cluster SSH keys failed", err.Error())
 			return
 		}
+		var currentStateSSHKeys []string
+		diags := state.SSHKeyIDs.ElementsAs(ctx, &currentStateSSHKeys, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		sshKeys = orderStringIDsByPreference(sshKeys, currentStateSSHKeys)
 		listValue, diags := tftypes.ListValueFrom(ctx, tftypes.StringType, sshKeys)
 		resp.Diagnostics.Append(diags...)
 		if resp.Diagnostics.HasError() {
@@ -479,6 +483,7 @@ func (r *resourceCluster) Read(ctx context.Context, req resource.ReadRequest, re
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
+// nolint:gocyclo // Update handles version/CNI/preset/SSH key reconciliation paths.
 func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	if !r.ValidateResourceBaseUpdate(resp) {
 		return
@@ -525,9 +530,12 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 	curCNIVer := strings.TrimSpace(state.CNIVersion.ValueString())
 	needCNI := (wantCNIType != "" && wantCNIType != curCNIType) ||
 		(wantCNIVer != "" && wantCNIVer != curCNIVer)
+	wantPreset := strings.TrimSpace(plan.Preset.ValueString())
+	curPreset := strings.TrimSpace(state.Preset.ValueString())
+	needPreset := wantPreset != curPreset
 
 	// Nothing to change -> just keep state
-	if !needVersion && !needCNI && !manageSSHKeys {
+	if !needVersion && !needCNI && !needPreset && !manageSSHKeys {
 		resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 		return
 	}
@@ -535,7 +543,8 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 	// ---- build minimal patch (matches KKP spec shape) ----
 	pcli := kapi.New(r.Client.Transport, nil)
 
-	if needVersion || needCNI {
+	if needVersion || needCNI || needPreset {
+		patchBody := map[string]any{}
 		spec := map[string]any{}
 		if needVersion {
 			spec["version"] = wantVersion
@@ -547,7 +556,12 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 				"version": wantCNIVer,
 			}
 		}
-		patchBody := map[string]any{"spec": spec}
+		if len(spec) > 0 {
+			patchBody["spec"] = spec
+		}
+		if needPreset {
+			patchBody["credential"] = wantPreset
+		}
 
 		_, err := pcli.PatchClusterV2(
 			kapi.NewPatchClusterV2Params().
@@ -565,6 +579,7 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 			"version":    wantVersion,
 			"cni_type":   wantCNIType,
 			"cni_ver":    wantCNIVer,
+			"preset":     wantPreset,
 		})
 
 		// ---- wait for update to complete ----
@@ -574,15 +589,22 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 			ClusterID: id,
 		}
 
-		expectedSpec := kkp.ClusterUpdateSpec{
-			K8sVersion: wantVersion,
-			CNIType:    wantCNIType,
-			CNIVersion: wantCNIVer,
-		}
+		if needVersion || needCNI {
+			expectedSpec := kkp.ClusterUpdateSpec{
+				K8sVersion: wantVersion,
+				CNIType:    wantCNIType,
+				CNIVersion: wantCNIVer,
+			}
 
-		if err := checker.WaitForClusterUpdated(ctx, expectedSpec); err != nil {
-			resp.Diagnostics.AddError("Cluster update timed out", err.Error())
-			return
+			if err := checker.WaitForClusterUpdated(ctx, expectedSpec); err != nil {
+				resp.Diagnostics.AddError("Cluster update timed out", err.Error())
+				return
+			}
+		} else if needPreset {
+			if err := checker.WaitForClusterReady(ctx); err != nil {
+				resp.Diagnostics.AddError("Cluster preset update timed out", err.Error())
+				return
+			}
 		}
 	}
 
@@ -734,10 +756,10 @@ func (r *resourceCluster) syncClusterSSHKeys(ctx context.Context, pcli kapi.Clie
 	}
 
 	if len(assign) == 0 && len(detach) == 0 {
-		return currentIDs, nil
+		return desiredIDs, nil
 	}
 
-	return r.fetchClusterSSHKeys(ctx, pcli, clusterID)
+	return desiredIDs, nil
 }
 
 func normalizeStringIDs(ids []string) []string {
@@ -754,7 +776,42 @@ func normalizeStringIDs(ids []string) []string {
 		seen[trimmed] = struct{}{}
 		result = append(result, trimmed)
 	}
-	sort.Strings(result)
+	return result
+}
+
+func orderStringIDsByPreference(ids, preference []string) []string {
+	normalizedIDs := normalizeStringIDs(ids)
+	normalizedPreference := normalizeStringIDs(preference)
+
+	idSet := make(map[string]struct{}, len(normalizedIDs))
+	for _, id := range normalizedIDs {
+		idSet[id] = struct{}{}
+	}
+
+	result := make([]string, 0, len(normalizedIDs))
+	used := make(map[string]struct{}, len(normalizedIDs))
+
+	for _, id := range normalizedPreference {
+		if _, ok := idSet[id]; !ok {
+			continue
+		}
+		if _, ok := used[id]; ok {
+			continue
+		}
+		used[id] = struct{}{}
+		result = append(result, id)
+	}
+
+	additionalIDs := make([]string, 0, len(normalizedIDs))
+	for _, id := range normalizedIDs {
+		if _, ok := used[id]; ok {
+			continue
+		}
+		additionalIDs = append(additionalIDs, id)
+	}
+	sort.Strings(additionalIDs)
+	result = append(result, additionalIDs...)
+
 	return result
 }
 
