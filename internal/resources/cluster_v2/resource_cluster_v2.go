@@ -613,10 +613,14 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 		}
 
 		if needVersion || needCNI {
+			// Only a Kubernetes version change restarts the API server; passing
+			// the unchanged version makes the wait expect a restart that never comes.
 			expectedSpec := kkp.ClusterUpdateSpec{
-				K8sVersion: wantVersion,
 				CNIType:    wantCNIType,
 				CNIVersion: wantCNIVer,
+			}
+			if needVersion {
+				expectedSpec.K8sVersion = wantVersion
 			}
 
 			if err := checker.WaitForClusterUpdated(ctx, expectedSpec); err != nil {
