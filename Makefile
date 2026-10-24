@@ -266,7 +266,7 @@ bump-docs-version: ## Update version in templates and examples using VERSION
 	  echo "ERROR: Set VERSION (vX.Y.Z) or create a VERSION file before bumping." >&2; exit 1; \
 	fi
 	@echo "Updating templates and README to use ~> $(patsubst v%,%,$(VERSION)) ..."
-	@perl -0pi -e 's/(version\s*=\s*")(~>\s*)?[^"\n]+(")/$1~> $(patsubst v%,%,$(VERSION))$3/g' \
+	@perl -0pi -e 's/(\bversion\s*=\s*")(~>\s*)?[^"\n]+(")/$$1~> $(patsubst v%,%,$(VERSION))$$3/g' \
 	  templates/index.md.tmpl templates/guides/getting-started.md.tmpl README.md
 	@echo "Bumping example provider constraints to ~> $(patsubst v%,%,$(VERSION)) ..."
 	@$(MAKE) examples-bump-version
