@@ -27,7 +27,7 @@ Create a KKP cluster in the provider-level project (modular cloud support).
 - `aws` (Block, Optional) (see [below for nested schema](#nestedblock--aws))
 - `azure` (Block, Optional) (see [below for nested schema](#nestedblock--azure))
 - `cni_type` (String) CNI plugin type (default: cilium).
-- `cni_version` (String) CNI plugin version (default: v1.14).
+- `cni_version` (String) CNI plugin version (default: 1.16.9).
 - `openstack` (Block, Optional) (see [below for nested schema](#nestedblock--openstack))
 - `preset` (String) KKP preset/credential name. Leave empty when using OpenStack application credentials.
 - `ssh_key_ids` (List of String) Existing SSH key IDs to assign to the cluster.

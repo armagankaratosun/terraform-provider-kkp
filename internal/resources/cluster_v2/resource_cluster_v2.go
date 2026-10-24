@@ -45,6 +45,9 @@ func (r *resourceCluster) Schema(_ context.Context, _ resource.SchemaRequest, re
 			"id": rschema.StringAttribute{
 				Computed:    true,
 				Description: "Cluster ID.",
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"use_template": rschema.BoolAttribute{
 				Optional:    true,
@@ -119,7 +122,7 @@ func (r *resourceCluster) Schema(_ context.Context, _ resource.SchemaRequest, re
 			},
 			"cni_version": rschema.StringAttribute{
 				Optional:    true,
-				Description: "CNI plugin version (default: v1.14).",
+				Description: "CNI plugin version (default: " + kkp.DefaultCNIVersion + ").",
 			},
 		},
 		Blocks: map[string]rschema.Block{
@@ -458,6 +461,16 @@ func (r *resourceCluster) Read(ctx context.Context, req resource.ReadRequest, re
 
 	state.ID = tftypes.StringValue(got.Payload.ID)
 	state.Name = tftypes.StringValue(got.Payload.Name)
+	// Refresh CNI settings only when they are managed: populating an unset
+	// attribute would plan a change, and cni_type changes force replacement.
+	if spec := got.Payload.Spec; spec != nil && spec.CniPlugin != nil {
+		if t := strings.TrimSpace(string(spec.CniPlugin.Type)); t != "" && !state.CNIType.IsNull() && !state.CNIType.IsUnknown() {
+			state.CNIType = tftypes.StringValue(t)
+		}
+		if v := strings.TrimSpace(spec.CniPlugin.Version); v != "" && !state.CNIVersion.IsNull() && !state.CNIVersion.IsUnknown() {
+			state.CNIVersion = tftypes.StringValue(v)
+		}
+	}
 	if state.SSHKeyIDs.IsNull() || state.SSHKeyIDs.IsUnknown() {
 		state.SSHKeyIDs = tftypes.ListNull(tftypes.StringType)
 	} else {
@@ -550,7 +563,11 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 			spec["version"] = wantVersion
 		}
 		if needCNI {
-			// KKP expects spec.cniPlugin.{type,version}
+			// KKP expects spec.cniPlugin.{type,version}; an empty type is
+			// rejected, so a version-only change keeps the current type.
+			if wantCNIType == "" {
+				wantCNIType = r.currentCNIType(pcli, id, curCNIType)
+			}
 			spec["cniPlugin"] = map[string]any{
 				"type":    wantCNIType,
 				"version": wantCNIVer,
@@ -571,6 +588,12 @@ func (r *resourceCluster) Update(ctx context.Context, req resource.UpdateRequest
 			nil,
 		)
 		if err != nil {
+			var pe *kapi.PatchClusterV2Default
+			if errors.As(err, &pe) && pe.Payload != nil {
+				b, _ := json.MarshalIndent(pe.Payload, "", "  ")
+				resp.Diagnostics.AddError("Patch cluster failed", string(b))
+				return
+			}
 			resp.Diagnostics.AddError("Patch cluster failed", err.Error())
 			return
 		}
@@ -760,6 +783,26 @@ func (r *resourceCluster) syncClusterSSHKeys(ctx context.Context, pcli kapi.Clie
 	}
 
 	return desiredIDs, nil
+}
+
+// currentCNIType returns the CNI type to send with a version-only change:
+// the type in state, else the type the cluster runs, else the provider default.
+func (r *resourceCluster) currentCNIType(pcli kapi.ClientService, clusterID, stateType string) string {
+	if stateType != "" {
+		return stateType
+	}
+	got, err := pcli.GetClusterV2(
+		kapi.NewGetClusterV2Params().
+			WithProjectID(r.DefaultProjectID).
+			WithClusterID(clusterID),
+		nil,
+	)
+	if err == nil && got != nil && got.Payload != nil && got.Payload.Spec != nil && got.Payload.Spec.CniPlugin != nil {
+		if t := strings.TrimSpace(string(got.Payload.Spec.CniPlugin.Type)); t != "" {
+			return t
+		}
+	}
+	return kkp.DefaultCNIType
 }
 
 func normalizeStringIDs(ids []string) []string {
